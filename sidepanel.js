@@ -509,7 +509,12 @@ function createBookmarkItem(node) {
   iconWrap.className = 'bookmark-icon';
   if (node.url) {
     const img = document.createElement('img');
-    img.src = `https://www.google.com/s2/favicons?domain=${getDomain(node.url)}&sz=16`;
+    try {
+      // Use Chrome's built-in favicon cache (no external requests needed)
+      img.src = `chrome://favicon/size/16@1x/${new URL(node.url).origin}`;
+    } catch {
+      img.style.display = 'none';
+    }
     img.alt = '';
     img.onerror = () => (img.style.display = 'none');
     iconWrap.appendChild(img);
@@ -521,7 +526,7 @@ function createBookmarkItem(node) {
   info.className = 'bookmark-info';
   const titleEl = document.createElement('div');
   titleEl.className = 'bookmark-title';
-  titleEl.textContent = node.title || (node.url ? new URL(node.url).hostname : 'Untitled');
+  titleEl.textContent = node.title || getDomain(node.url) || 'Untitled';
   info.appendChild(titleEl);
   if (node.url) {
     const urlEl = document.createElement('div');

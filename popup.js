@@ -50,7 +50,13 @@ async function closeDuplicates() {
   tabs.forEach((tab) => {
     if (!tab.url) return;
     let url;
-    try { const u = new URL(tab.url); url = u.hostname + u.pathname; } catch (e) { console.warn('URL parse failed:', tab.url, e); url = tab.url; }
+    try {
+      const u = new URL(tab.url);
+      url = u.hostname + u.pathname;
+    } catch (e) {
+      console.warn('URL parse failed:', tab.url, e);
+      url = tab.url;
+    }
     if (seen.has(url)) {
       toClose.push(tab.id);
     } else {
@@ -129,9 +135,7 @@ async function loadSessions() {
 }
 
 async function restoreSession(session) {
-  for (const { url } of session.tabs) {
-    await chrome.tabs.create({ url, active: false });
-  }
+  await Promise.all(session.tabs.map(({ url }) => chrome.tabs.create({ url, active: false })));
   showToast(`Restored ${session.tabs.length} tabs`, 'success');
 }
 
