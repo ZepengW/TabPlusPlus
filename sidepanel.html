@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TabPlusPlus</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+</head>
+<body>
+  <!-- Top header -->
+  <header class="header">
+    <div class="header-logo">
+      <div class="logo-icon">T+</div>
+      <span class="logo-text">TabPlusPlus</span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btnSettings" title="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Navigation tabs -->
+  <nav class="nav-tabs">
+    <button class="nav-tab active" data-view="tabs" id="navTabs">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="18" height="4" rx="1"/>
+        <rect x="3" y="10" width="18" height="4" rx="1"/>
+        <rect x="3" y="17" width="18" height="4" rx="1"/>
+      </svg>
+      <span>标签页</span>
+      <span class="nav-badge" id="tabCountBadge">0</span>
+    </button>
+    <button class="nav-tab" data-view="bookmarks" id="navBookmarks">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+      </svg>
+      <span>书签</span>
+      <span class="nav-badge" id="bookmarkCountBadge">0</span>
+    </button>
+  </nav>
+
+  <!-- Tabs View -->
+  <div class="view" id="viewTabs">
+    <!-- Search bar -->
+    <div class="search-bar">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="tabSearch" placeholder="Search tabs…" class="search-input" />
+      <button class="search-clear" id="tabSearchClear" title="Clear">✕</button>
+    </div>
+
+    <!-- Filter pills -->
+    <div class="filter-row">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="current">Current Window</button>
+      <button class="filter-btn" data-filter="audible">Audible</button>
+      <button class="filter-btn" data-filter="pinned">Pinned</button>
+      <button class="filter-btn" data-filter="duplicates">Duplicates</button>
+    </div>
+
+    <!-- Sort and Group row -->
+    <div class="controls-row">
+      <div class="select-wrapper">
+        <select id="tabSort" class="sort-select">
+          <option value="recent">By Recent</option>
+          <option value="title">By Title</option>
+          <option value="domain">By Domain</option>
+        </select>
+      </div>
+      <button class="toggle-btn" id="btnGroupBy" title="Group by domain">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        Group
+      </button>
+    </div>
+
+    <!-- Tab list -->
+    <div class="tab-list" id="tabList">
+      <div class="skeleton-list" id="tabSkeleton">
+        <div class="skeleton-item"></div>
+        <div class="skeleton-item"></div>
+        <div class="skeleton-item"></div>
+        <div class="skeleton-item"></div>
+      </div>
+    </div>
+
+    <!-- Bottom toolbar -->
+    <div class="bottom-toolbar">
+      <button class="toolbar-btn" id="btnSelectAll" title="Select all">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        Select All
+      </button>
+      <button class="toolbar-btn danger" id="btnCloseSelected" title="Close selected tabs" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+        Close
+      </button>
+      <button class="toolbar-btn" id="btnGroupSelected" title="Group selected tabs" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="3" y="3" width="7" height="7" rx="1"/>
+          <rect x="14" y="3" width="7" height="7" rx="1"/>
+          <rect x="3" y="14" width="7" height="7" rx="1"/>
+          <rect x="14" y="14" width="7" height="7" rx="1"/>
+        </svg>
+        Group
+      </button>
+      <button class="toolbar-btn accent" id="btnSaveSession" title="Save current session">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+          <polyline points="17 21 17 13 7 13 7 21"/>
+          <polyline points="7 3 7 8 15 8"/>
+        </svg>
+        Save
+      </button>
+    </div>
+  </div>
+
+  <!-- Bookmarks View -->
+  <div class="view hidden" id="viewBookmarks">
+    <!-- Search bar -->
+    <div class="search-bar">
+      <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      <input type="text" id="bookmarkSearch" placeholder="Search bookmarks…" class="search-input" />
+      <button class="search-clear" id="bookmarkSearchClear" title="Clear">✕</button>
+    </div>
+
+    <!-- Toolbar row -->
+    <div class="controls-row">
+      <div class="breadcrumb" id="breadcrumb">
+        <span class="breadcrumb-item active" data-id="0">All Bookmarks</span>
+      </div>
+      <button class="icon-btn-primary" id="btnAddBookmark" title="Add bookmark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Quick add bookmark form -->
+    <div class="add-bookmark-form hidden" id="addBookmarkForm">
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" id="bookmarkTitle" placeholder="Bookmark title" class="form-input" />
+      </div>
+      <div class="form-group">
+        <label>URL</label>
+        <input type="url" id="bookmarkUrl" placeholder="https://…" class="form-input" />
+      </div>
+      <div class="form-group">
+        <label>Folder</label>
+        <select id="bookmarkFolder" class="form-input"></select>
+      </div>
+      <div class="form-actions">
+        <button class="btn-secondary" id="btnCancelBookmark">Cancel</button>
+        <button class="btn-primary" id="btnSaveBookmark">Save</button>
+      </div>
+    </div>
+
+    <!-- Bookmark list -->
+    <div class="bookmark-list" id="bookmarkList">
+      <div class="skeleton-list" id="bookmarkSkeleton">
+        <div class="skeleton-item"></div>
+        <div class="skeleton-item"></div>
+        <div class="skeleton-item"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context menu (shared) -->
+  <div class="context-menu hidden" id="contextMenu">
+    <button class="context-menu-item" id="ctxOpen">Open</button>
+    <button class="context-menu-item" id="ctxEdit">Edit</button>
+    <button class="context-menu-item danger" id="ctxDelete">Delete</button>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Edit bookmark modal -->
+  <div class="modal-overlay hidden" id="editModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Edit Bookmark</h3>
+        <button class="icon-btn" id="btnCloseModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label>Title</label>
+        <input type="text" id="editTitle" class="form-input" />
+      </div>
+      <div class="form-group">
+        <label>URL</label>
+        <input type="url" id="editUrl" class="form-input" />
+      </div>
+      <div class="form-actions">
+        <button class="btn-secondary" id="btnCancelEdit">Cancel</button>
+        <button class="btn-primary" id="btnConfirmEdit">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
