@@ -2,6 +2,17 @@
 
 'use strict';
 
+// ─── Default Settings ────────────────────────────────────────────────────────
+const DEFAULT_SETTINGS = {
+  rememberLastView: true,
+  rememberFilters: true,
+  autoHide: false,
+  autoHideDelay: 3,          // seconds
+  bookmarkViewMode: 'flat',  // 'flat' | 'tree'
+  showRecentBookmarks: true,
+  recentBookmarksCount: 5,
+};
+
 // ─── State ──────────────────────────────────────────────────────────────────
 const state = {
   view: 'tabs',           // 'tabs' | 'bookmarks'
@@ -16,6 +27,12 @@ const state = {
   bookmarks: [],          // current folder nodes
   bookmarkPath: [{ id: '0', title: 'All Bookmarks' }],
   bookmarkSearchResults: null, // null = not searching
+  bookmarkViewMode: 'flat',    // 'flat' | 'tree'
+  bookmarkTreeExpanded: new Set(), // folder IDs expanded in tree view
+  bookmarkFullTree: null,      // cached full bookmark tree
+
+  recentBookmarks: [],    // recently accessed bookmarks [{id,title,url}]
+  settings: { ...DEFAULT_SETTINGS },
 
   contextTarget: null,    // { type: 'bookmark', node } | { type: 'tab', tab }
 };
@@ -40,6 +57,9 @@ async function init() {
   const win = await chrome.windows.getCurrent();
   state.currentWindowId = win.id;
 
+  // Load persisted settings and preferences first
+  await loadSettings();
+
   // Nav tabs
   document.querySelectorAll('.nav-tab').forEach((btn) => {
     btn.addEventListener('click', () => switchView(btn.dataset.view));
@@ -51,7 +71,11 @@ async function init() {
   document.querySelectorAll('.filter-btn').forEach((btn) =>
     btn.addEventListener('click', () => setTabFilter(btn.dataset.filter))
   );
-  $('tabSort').addEventListener('change', (e) => { state.tabSort = e.target.value; renderTabView(); });
+  $('tabSort').addEventListener('change', (e) => {
+    state.tabSort = e.target.value;
+    persistPreferences();
+    renderTabView();
+  });
   $('btnGroupBy').addEventListener('click', toggleGroupBy);
   $('btnSelectAll').addEventListener('click', toggleSelectAll);
   $('btnCloseSelected').addEventListener('click', closeSelectedTabs);
@@ -64,9 +88,24 @@ async function init() {
   $('btnAddBookmark').addEventListener('click', toggleAddBookmarkForm);
   $('btnSaveBookmark').addEventListener('click', saveBookmark);
   $('btnCancelBookmark').addEventListener('click', hideAddBookmarkForm);
+  $('btnBookmarkView').addEventListener('click', toggleBookmarkViewMode);
+
+  // Settings modal
+  $('btnSettings').addEventListener('click', openSettings);
+  $('btnCloseSettings').addEventListener('click', closeSettings);
+  $('btnCancelSettings').addEventListener('click', closeSettings);
+  $('btnSaveSettings').addEventListener('click', saveSettings);
+  $('settingsModal').addEventListener('click', (e) => { if (e.target === $('settingsModal')) closeSettings(); });
+  $('settingShowRecent').addEventListener('change', (e) => {
+    $('recentCountRow').style.display = e.target.checked ? '' : 'none';
+  });
+  $('settingAutoHide').addEventListener('change', (e) => {
+    $('autoHideDelayRow').style.display = e.target.checked ? '' : 'none';
+  });
 
   // Context menu
   $('ctxOpen').addEventListener('click', ctxOpen);
+  $('ctxOpenAll').addEventListener('click', ctxOpenAll);
   $('ctxEdit').addEventListener('click', ctxEdit);
   $('ctxDelete').addEventListener('click', ctxDelete);
   document.addEventListener('click', hideContextMenu);
@@ -81,8 +120,19 @@ async function init() {
   // Listen for background messages (tab events)
   chrome.runtime.onMessage.addListener(onBackgroundMessage);
 
-  await loadTabs();
-  await loadBookmarkCount();
+  // Setup auto-hide / compact mode
+  setupAutoHide();
+
+  // Start in saved view
+  if (state.view === 'bookmarks') {
+    applyPreferencesToUI();
+    await loadBookmarks();
+    await loadBookmarkCount();
+  } else {
+    applyPreferencesToUI();
+    await loadTabs();
+    await loadBookmarkCount();
+  }
 }
 
 // ─── View Switching ──────────────────────────────────────────────────────────
@@ -94,6 +144,7 @@ function switchView(view) {
   $('viewTabs').classList.toggle('hidden', view !== 'tabs');
   $('viewBookmarks').classList.toggle('hidden', view !== 'bookmarks');
 
+  persistPreferences();
   if (view === 'bookmarks') loadBookmarks();
 }
 
@@ -415,6 +466,7 @@ function setTabFilter(filter) {
   document.querySelectorAll('.filter-btn').forEach((btn) =>
     btn.classList.toggle('active', btn.dataset.filter === filter)
   );
+  persistPreferences();
   renderTabView();
 }
 
@@ -427,6 +479,7 @@ function onTabSearchInput() {
 function toggleGroupBy() {
   state.groupByDomain = !state.groupByDomain;
   $('btnGroupBy').classList.toggle('active', state.groupByDomain);
+  persistPreferences();
   renderTabView();
 }
 
@@ -467,6 +520,12 @@ async function onDrop(e) {
 
 // ─── Bookmark Management ─────────────────────────────────────────────────────
 async function loadBookmarks(nodeId) {
+  // If in tree mode, always load full tree
+  if (state.bookmarkViewMode === 'tree') {
+    await loadBookmarksTree();
+    return;
+  }
+  // Flat (folder) mode
   showBkSkeleton(true);
   const id = nodeId ?? state.bookmarkPath[state.bookmarkPath.length - 1].id;
   const tree = await chrome.bookmarks.getChildren(id);
@@ -488,14 +547,20 @@ async function loadBookmarkCount() {
 }
 
 function renderBookmarks(nodes) {
-  if (nodes.length === 0) {
-    bookmarkList.innerHTML = '';
-    bookmarkList.appendChild(emptyState('This folder is empty.'));
-    return;
-  }
-  const frag = document.createDocumentFragment();
-  nodes.forEach((node) => frag.appendChild(createBookmarkItem(node)));
   bookmarkList.innerHTML = '';
+  const frag = document.createDocumentFragment();
+
+  // Show recent bookmarks at root level in flat mode
+  const isRoot = state.bookmarkPath.length === 1 && !state.bookmarkSearchResults;
+  if (isRoot && state.settings.showRecentBookmarks && state.recentBookmarks.length > 0) {
+    frag.appendChild(createRecentBookmarksSection());
+  }
+
+  if (nodes.length === 0) {
+    frag.appendChild(emptyState('This folder is empty.'));
+  } else {
+    nodes.forEach((node) => frag.appendChild(createBookmarkItem(node)));
+  }
   bookmarkList.appendChild(frag);
 }
 
@@ -545,6 +610,19 @@ function createBookmarkItem(node) {
     editBtn.innerHTML = editSvg();
     editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(node); });
     actions.appendChild(editBtn);
+  } else {
+    // Folder: add "Open all" button
+    const openAllBtn = document.createElement('button');
+    openAllBtn.className = 'bm-btn';
+    openAllBtn.title = 'Open all bookmarks in folder';
+    openAllBtn.innerHTML = openAllSvg();
+    openAllBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      // Load children if not available
+      const children = await chrome.bookmarks.getChildren(node.id);
+      openAllInFolder({ ...node, children });
+    });
+    actions.appendChild(openAllBtn);
   }
 
   const delBtn = document.createElement('button');
@@ -566,6 +644,7 @@ function createBookmarkItem(node) {
   // Click
   item.addEventListener('click', () => {
     if (node.url) {
+      recordBookmarkAccess(node);
       chrome.tabs.create({ url: node.url });
     } else {
       navigateInto(node);
@@ -725,9 +804,417 @@ async function searchBookmarks(query) {
   renderBookmarks(results);
 }
 
+// ─── Bookmark Tree View ──────────────────────────────────────────────────────
+async function loadBookmarksTree() {
+  showBkSkeleton(true);
+  try {
+    const fullTree = await chrome.bookmarks.getTree();
+    state.bookmarkFullTree = fullTree;
+    renderBookmarksTree(fullTree[0].children || []);
+    // Hide breadcrumb in tree mode
+    breadcrumb.innerHTML = '<span class="breadcrumb-item active">All Bookmarks (Tree)</span>';
+    await loadBookmarkCount();
+  } catch (e) {
+    showToast('Failed to load bookmarks', 'error');
+  }
+  showBkSkeleton(false);
+}
+
+function renderBookmarksTree(nodes) {
+  bookmarkList.innerHTML = '';
+  const frag = document.createDocumentFragment();
+
+  // Show recent bookmarks section at top
+  if (state.settings.showRecentBookmarks && state.recentBookmarks.length > 0) {
+    frag.appendChild(createRecentBookmarksSection());
+  }
+
+  buildTreeNodes(nodes, frag, 0);
+  bookmarkList.appendChild(frag);
+}
+
+function buildTreeNodes(nodes, container, level) {
+  nodes.forEach((node) => {
+    const item = createTreeItem(node, level);
+    container.appendChild(item);
+    if (!node.url && node.children && node.children.length > 0) {
+      const childWrap = document.createElement('div');
+      childWrap.className = 'tree-children';
+      childWrap.dataset.folderId = node.id;
+      if (!state.bookmarkTreeExpanded.has(node.id)) {
+        childWrap.classList.add('collapsed');
+      }
+      buildTreeNodes(node.children, childWrap, level + 1);
+      container.appendChild(childWrap);
+    }
+  });
+}
+
+function createTreeItem(node, level) {
+  const item = document.createElement('div');
+  item.className = 'bookmark-item tree-item';
+  item.dataset.bmId = node.id;
+  item.style.paddingLeft = (8 + level * 14) + 'px';
+
+  if (!node.url) {
+    // Folder: show expand/collapse toggle
+    const isExpanded = state.bookmarkTreeExpanded.has(node.id);
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'tree-expand-btn';
+    expandBtn.innerHTML = isExpanded ? chevronDownSvg() : chevronRightSvg();
+    expandBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTreeFolder(node.id);
+    });
+    item.appendChild(expandBtn);
+  } else {
+    const spacer = document.createElement('div');
+    spacer.className = 'tree-spacer';
+    item.appendChild(spacer);
+  }
+
+  // Icon
+  const iconWrap = document.createElement('div');
+  iconWrap.className = 'bookmark-icon';
+  if (node.url) {
+    const img = document.createElement('img');
+    try { img.src = `chrome://favicon/size/16@1x/${new URL(node.url).origin}`; } catch { img.style.display = 'none'; }
+    img.alt = '';
+    img.onerror = () => (img.style.display = 'none');
+    iconWrap.appendChild(img);
+  } else {
+    iconWrap.innerHTML = `<svg class="folder-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M10 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>`;
+  }
+
+  const info = document.createElement('div');
+  info.className = 'bookmark-info';
+  const titleEl = document.createElement('div');
+  titleEl.className = 'bookmark-title';
+  titleEl.textContent = node.title || getDomain(node.url) || 'Untitled';
+  info.appendChild(titleEl);
+
+  const actions = document.createElement('div');
+  actions.className = 'bookmark-actions';
+
+  if (node.url) {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'bm-btn';
+    editBtn.title = 'Edit';
+    editBtn.innerHTML = editSvg();
+    editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(node); });
+    actions.appendChild(editBtn);
+  } else if (node.children && node.children.length > 0) {
+    const openAllBtn = document.createElement('button');
+    openAllBtn.className = 'bm-btn';
+    openAllBtn.title = 'Open all in folder';
+    openAllBtn.innerHTML = openAllSvg();
+    openAllBtn.addEventListener('click', (e) => { e.stopPropagation(); openAllInFolder(node); });
+    actions.appendChild(openAllBtn);
+  }
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'bm-btn delete';
+  delBtn.title = 'Delete';
+  delBtn.innerHTML = trashSvg();
+  delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteBookmark(node); });
+  actions.appendChild(delBtn);
+
+  item.append(iconWrap, info, actions);
+
+  item.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    state.contextTarget = { type: 'bookmark', node };
+    showContextMenu(e.clientX, e.clientY, !!node.url);
+  });
+
+  item.addEventListener('click', () => {
+    if (node.url) {
+      recordBookmarkAccess(node);
+      chrome.tabs.create({ url: node.url });
+    } else {
+      toggleTreeFolder(node.id);
+    }
+  });
+
+  return item;
+}
+
+function toggleTreeFolder(folderId) {
+  if (state.bookmarkTreeExpanded.has(folderId)) {
+    state.bookmarkTreeExpanded.delete(folderId);
+  } else {
+    state.bookmarkTreeExpanded.add(folderId);
+  }
+  // Toggle visibility of children without full re-render
+  const childWrap = bookmarkList.querySelector(`.tree-children[data-folder-id="${folderId}"]`);
+  if (childWrap) {
+    childWrap.classList.toggle('collapsed', !state.bookmarkTreeExpanded.has(folderId));
+    // Update expand button icon
+    const item = bookmarkList.querySelector(`.tree-item[data-bm-id="${folderId}"]`);
+    if (item) {
+      const btn = item.querySelector('.tree-expand-btn');
+      if (btn) btn.innerHTML = state.bookmarkTreeExpanded.has(folderId) ? chevronDownSvg() : chevronRightSvg();
+    }
+  } else if (state.bookmarkFullTree) {
+    // Children container not yet rendered – re-render tree
+    renderBookmarksTree(state.bookmarkFullTree[0].children || []);
+  }
+}
+
+// Toggle bookmark view mode between flat and tree
+function toggleBookmarkViewMode() {
+  state.bookmarkViewMode = state.bookmarkViewMode === 'flat' ? 'tree' : 'flat';
+  updateBookmarkViewButton();
+  // Reset path when switching to tree mode
+  if (state.bookmarkViewMode === 'tree') {
+    state.bookmarkPath = [{ id: '0', title: 'All Bookmarks' }];
+  }
+  loadBookmarks();
+}
+
+function updateBookmarkViewButton() {
+  const btn = $('btnBookmarkView');
+  if (state.bookmarkViewMode === 'tree') {
+    btn.classList.add('active');
+    btn.title = 'Switch to Folder view';
+    $('bmViewIcon').innerHTML = `<path d="M3 3h4v4H3zM3 10h4v4H3zM3 17h4v4H3z"/><line x1="10" y1="5" x2="21" y2="5"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="19" x2="21" y2="19"/>`;
+  } else {
+    btn.classList.remove('active');
+    btn.title = 'Switch to Tree view';
+    $('bmViewIcon').innerHTML = `<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>`;
+  }
+}
+
+// Open all bookmarks in a folder
+async function openAllInFolder(node) {
+  if (!node.children) return;
+  const urls = [];
+  const collect = (nodes) => nodes.forEach((n) => { if (n.url) urls.push(n.url); if (n.children) collect(n.children); });
+  collect(node.children);
+  if (urls.length === 0) { showToast('No bookmarks in this folder', 'error'); return; }
+  if (urls.length > OPEN_ALL_CONFIRM_THRESHOLD) {
+    if (!confirm(`Open ${urls.length} tabs?`)) return;
+  }
+  urls.forEach((url) => chrome.tabs.create({ url, active: false }));
+  showToast(`Opened ${urls.length} tab${urls.length > 1 ? 's' : ''}`, 'success');
+}
+
+// ─── Recent Bookmarks ────────────────────────────────────────────────────────
+async function recordBookmarkAccess(node) {
+  if (!node.url) return;
+  const entry = { id: node.id, title: node.title || node.url, url: node.url };
+  state.recentBookmarks = state.recentBookmarks.filter((b) => b.id !== node.id);
+  state.recentBookmarks.unshift(entry);
+  const max = state.settings.recentBookmarksCount || 5;
+  if (state.recentBookmarks.length > max) state.recentBookmarks.length = max;
+  await chrome.storage.local.set({ recentBookmarks: state.recentBookmarks });
+}
+
+function createRecentBookmarksSection() {
+  const section = document.createElement('div');
+  section.className = 'recent-section';
+
+  const header = document.createElement('div');
+  header.className = 'recent-header';
+  header.innerHTML = `<span class="recent-label">⏱ Recent</span>`;
+  section.appendChild(header);
+
+  state.recentBookmarks.forEach((bm) => {
+    const item = document.createElement('div');
+    item.className = 'bookmark-item recent-item';
+
+    const iconWrap = document.createElement('div');
+    iconWrap.className = 'bookmark-icon';
+    const img = document.createElement('img');
+    try { img.src = `chrome://favicon/size/16@1x/${new URL(bm.url).origin}`; } catch { img.style.display = 'none'; }
+    img.alt = '';
+    img.onerror = () => (img.style.display = 'none');
+    iconWrap.appendChild(img);
+
+    const info = document.createElement('div');
+    info.className = 'bookmark-info';
+    const titleEl = document.createElement('div');
+    titleEl.className = 'bookmark-title';
+    titleEl.textContent = bm.title;
+    info.appendChild(titleEl);
+
+    item.append(iconWrap, info);
+    item.addEventListener('click', () => {
+      recordBookmarkAccess(bm);
+      chrome.tabs.create({ url: bm.url });
+    });
+    section.appendChild(item);
+  });
+
+  return section;
+}
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+async function loadSettings() {
+  const stored = await chrome.storage.local.get([
+    'settings', 'lastView', 'lastTabFilter', 'lastTabSort',
+    'lastGroupByDomain', 'recentBookmarks',
+  ]);
+  state.settings = { ...DEFAULT_SETTINGS, ...(stored.settings || {}) };
+  state.recentBookmarks = stored.recentBookmarks || [];
+
+  if (state.settings.rememberLastView && stored.lastView) {
+    state.view = stored.lastView;
+  }
+  if (state.settings.rememberFilters) {
+    if (stored.lastTabFilter) state.tabFilter = stored.lastTabFilter;
+    if (stored.lastTabSort) state.tabSort = stored.lastTabSort;
+    if (stored.lastGroupByDomain !== undefined) state.groupByDomain = !!stored.lastGroupByDomain;
+  }
+  state.bookmarkViewMode = state.settings.bookmarkViewMode || 'flat';
+}
+
+function applyPreferencesToUI() {
+  // Apply saved tab filter
+  document.querySelectorAll('.filter-btn').forEach((btn) =>
+    btn.classList.toggle('active', btn.dataset.filter === state.tabFilter)
+  );
+  // Apply saved sort
+  const sortSel = $('tabSort');
+  if (sortSel) sortSel.value = state.tabSort;
+  // Apply group by domain
+  $('btnGroupBy').classList.toggle('active', state.groupByDomain);
+  // Apply bookmark view mode icon
+  updateBookmarkViewButton();
+  // Apply view switch UI
+  document.querySelectorAll('.nav-tab').forEach((btn) =>
+    btn.classList.toggle('active', btn.dataset.view === state.view)
+  );
+  $('viewTabs').classList.toggle('hidden', state.view !== 'tabs');
+  $('viewBookmarks').classList.toggle('hidden', state.view !== 'bookmarks');
+}
+
+async function persistPreferences() {
+  if (!state.settings.rememberLastView && !state.settings.rememberFilters) return;
+  const data = {};
+  if (state.settings.rememberLastView) data.lastView = state.view;
+  if (state.settings.rememberFilters) {
+    data.lastTabFilter = state.tabFilter;
+    data.lastTabSort = state.tabSort;
+    data.lastGroupByDomain = state.groupByDomain;
+  }
+  await chrome.storage.local.set(data);
+}
+
+function openSettings() {
+  const s = state.settings;
+  $('settingRememberView').checked = s.rememberLastView;
+  $('settingRememberFilters').checked = s.rememberFilters;
+  $('settingAutoHide').checked = s.autoHide;
+  $('settingAutoHideDelay').value = s.autoHideDelay;
+  $('settingShowRecent').checked = s.showRecentBookmarks;
+  $('settingRecentCount').value = s.recentBookmarksCount;
+  document.querySelector(`input[name="bookmarkViewMode"][value="${s.bookmarkViewMode}"]`).checked = true;
+  $('autoHideDelayRow').style.display = s.autoHide ? '' : 'none';
+  $('recentCountRow').style.display = s.showRecentBookmarks ? '' : 'none';
+  $('settingsModal').classList.remove('hidden');
+}
+
+function closeSettings() {
+  $('settingsModal').classList.add('hidden');
+}
+
+async function saveSettings() {
+  const prev = { ...state.settings };
+  state.settings.rememberLastView = $('settingRememberView').checked;
+  state.settings.rememberFilters = $('settingRememberFilters').checked;
+  state.settings.autoHide = $('settingAutoHide').checked;
+  state.settings.autoHideDelay = parseInt($('settingAutoHideDelay').value, 10) || 3;
+  state.settings.showRecentBookmarks = $('settingShowRecent').checked;
+  state.settings.recentBookmarksCount = parseInt($('settingRecentCount').value, 10) || 5;
+  state.settings.bookmarkViewMode = document.querySelector('input[name="bookmarkViewMode"]:checked')?.value || 'flat';
+
+  await chrome.storage.local.set({ settings: state.settings });
+  closeSettings();
+
+  // Apply changes
+  if (state.settings.bookmarkViewMode !== prev.bookmarkViewMode) {
+    state.bookmarkViewMode = state.settings.bookmarkViewMode;
+    updateBookmarkViewButton();
+    if (state.view === 'bookmarks') loadBookmarks();
+  }
+  if (state.settings.autoHide !== prev.autoHide || state.settings.autoHideDelay !== prev.autoHideDelay) {
+    setupAutoHide();
+  }
+  showToast('Settings saved', 'success');
+}
+
+// ─── Auto-hide / Compact Mode ────────────────────────────────────────────────
+const OPEN_ALL_CONFIRM_THRESHOLD = 10;
+const AUTO_HIDE_MOUSE_LEAVE_DELAY = 800; // ms delay when mouse leaves panel
+
+let _autoHideTimer = null;
+let _autoHideListenersAttached = false;
+
+// Persistent handler refs so we can remove them
+function _onAutoHideActivity() {
+  if (!state.settings.autoHide) return;
+  document.body.classList.remove('compact-mode');
+  _startAutoHideTimer();
+}
+function _onAutoHideLeave() {
+  if (!state.settings.autoHide) return;
+  clearTimeout(_autoHideTimer);
+  _autoHideTimer = setTimeout(() => {
+    document.body.classList.add('compact-mode');
+  }, AUTO_HIDE_MOUSE_LEAVE_DELAY);
+}
+function _onAutoHideEnter() {
+  if (!state.settings.autoHide) return;
+  document.body.classList.remove('compact-mode');
+  _startAutoHideTimer();
+}
+
+function _startAutoHideTimer() {
+  clearTimeout(_autoHideTimer);
+  const delay = (state.settings.autoHideDelay || 3) * 1000;
+  _autoHideTimer = setTimeout(() => {
+    document.body.classList.add('compact-mode');
+  }, delay);
+}
+
+function setupAutoHide() {
+  document.body.classList.remove('compact-mode');
+  clearTimeout(_autoHideTimer);
+
+  if (!state.settings.autoHide) {
+    document.body.classList.remove('auto-hide-enabled');
+    // Remove listeners if they were previously added
+    if (_autoHideListenersAttached) {
+      document.body.removeEventListener('mousemove', _onAutoHideActivity);
+      document.body.removeEventListener('click', _onAutoHideActivity);
+      document.body.removeEventListener('mouseleave', _onAutoHideLeave);
+      document.body.removeEventListener('mouseenter', _onAutoHideEnter);
+      _autoHideListenersAttached = false;
+    }
+    return;
+  }
+
+  document.body.classList.add('auto-hide-enabled');
+
+  // Only attach listeners once
+  if (!_autoHideListenersAttached) {
+    document.body.addEventListener('mousemove', _onAutoHideActivity);
+    document.body.addEventListener('click', _onAutoHideActivity);
+    document.body.addEventListener('mouseleave', _onAutoHideLeave);
+    document.body.addEventListener('mouseenter', _onAutoHideEnter);
+    _autoHideListenersAttached = true;
+  }
+
+  _startAutoHideTimer();
+}
+
 // ─── Context Menu ────────────────────────────────────────────────────────────
-function showContextMenu(x, y, showEdit = true) {
-  $('ctxEdit').style.display = showEdit ? '' : 'none';
+function showContextMenu(x, y, isBookmarkUrl = false) {
+  // isBookmarkUrl: true = bookmark link; false = folder or tab
+  $('ctxOpen').style.display = isBookmarkUrl ? '' : 'none';
+  $('ctxOpenAll').style.display = (!isBookmarkUrl && state.contextTarget?.type === 'bookmark') ? '' : 'none';
+  $('ctxEdit').style.display = isBookmarkUrl ? '' : 'none';
   contextMenu.style.left = x + 'px';
   contextMenu.style.top  = y + 'px';
   contextMenu.classList.remove('hidden');
@@ -747,6 +1234,15 @@ function ctxOpen(e) {
   const t = state.contextTarget;
   if (!t) return;
   if (t.type === 'bookmark' && t.node.url) chrome.tabs.create({ url: t.node.url });
+}
+
+async function ctxOpenAll(e) {
+  e.stopPropagation();
+  hideContextMenu();
+  const t = state.contextTarget;
+  if (!t || t.type !== 'bookmark' || t.node.url) return;
+  const children = await chrome.bookmarks.getChildren(t.node.id);
+  openAllInFolder({ ...t.node, children });
 }
 
 function ctxEdit(e) {
@@ -851,6 +1347,9 @@ const muteSvg   = () => svg('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"
 const unMuteSvg = () => svg('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/>');
 const editSvg   = () => svg('<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>');
 const trashSvg  = () => svg('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>');
+const chevronRightSvg = () => svg('<polyline points="9 18 15 12 9 6"/>');
+const chevronDownSvg  = () => svg('<polyline points="6 9 12 15 18 9"/>');
+const openAllSvg = () => svg('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>');
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
