@@ -145,6 +145,13 @@
       <div class="breadcrumb" id="breadcrumb">
         <span class="breadcrumb-item active" data-id="0">All Bookmarks</span>
       </div>
+      <button class="toggle-btn" id="btnBookmarkView" title="Switch view mode (Tree / Folder)">
+        <svg id="bmViewIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
       <button class="icon-btn-primary" id="btnAddBookmark" title="Add bookmark">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -185,6 +192,7 @@
   <!-- Context menu (shared) -->
   <div class="context-menu hidden" id="contextMenu">
     <button class="context-menu-item" id="ctxOpen">Open</button>
+    <button class="context-menu-item" id="ctxOpenAll">Open All in Folder</button>
     <button class="context-menu-item" id="ctxEdit">Edit</button>
     <button class="context-menu-item danger" id="ctxDelete">Delete</button>
   </div>
@@ -210,6 +218,71 @@
       <div class="form-actions">
         <button class="btn-secondary" id="btnCancelEdit">Cancel</button>
         <button class="btn-primary" id="btnConfirmEdit">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div class="modal-overlay hidden" id="settingsModal">
+    <div class="modal settings-modal">
+      <div class="modal-header">
+        <h3>⚙ Settings</h3>
+        <button class="icon-btn" id="btnCloseSettings">✕</button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-section">
+          <h4 class="settings-section-title">General</h4>
+          <label class="settings-item">
+            <span>Remember last view (Tabs / Bookmarks)</span>
+            <input type="checkbox" id="settingRememberView" />
+          </label>
+          <label class="settings-item">
+            <span>Remember filter &amp; sort preferences</span>
+            <input type="checkbox" id="settingRememberFilters" />
+          </label>
+        </div>
+
+        <div class="settings-section">
+          <h4 class="settings-section-title">Bookmarks</h4>
+          <div class="settings-item">
+            <span>Default view mode</span>
+            <div class="settings-radio-group">
+              <label class="radio-label">
+                <input type="radio" name="bookmarkViewMode" value="flat" id="bmViewFlat" />
+                <span>Folder</span>
+              </label>
+              <label class="radio-label">
+                <input type="radio" name="bookmarkViewMode" value="tree" id="bmViewTree" />
+                <span>Tree</span>
+              </label>
+            </div>
+          </div>
+          <label class="settings-item">
+            <span>Show recent bookmarks section</span>
+            <input type="checkbox" id="settingShowRecent" />
+          </label>
+          <label class="settings-item" id="recentCountRow">
+            <span>Recent bookmarks count</span>
+            <input type="number" id="settingRecentCount" min="1" max="20" class="settings-number-input" />
+          </label>
+        </div>
+
+        <div class="settings-section">
+          <h4 class="settings-section-title">Display</h4>
+          <label class="settings-item">
+            <span>Auto-compact on idle</span>
+            <input type="checkbox" id="settingAutoHide" />
+          </label>
+          <label class="settings-item" id="autoHideDelayRow">
+            <span>Compact delay (seconds)</span>
+            <input type="number" id="settingAutoHideDelay" min="1" max="60" class="settings-number-input" />
+          </label>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button class="btn-secondary" id="btnCancelSettings">Cancel</button>
+        <button class="btn-primary" id="btnSaveSettings">Save</button>
       </div>
     </div>
   </div>
