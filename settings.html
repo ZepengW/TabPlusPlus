@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TabPlusPlus – Settings</title>
+  <link rel="stylesheet" href="settings.css" />
+</head>
+<body>
+  <div class="settings-page">
+    <!-- Header -->
+    <header class="sp-header">
+      <div class="sp-header-inner">
+        <div class="sp-logo">
+          <div class="sp-logo-icon">T+</div>
+          <span class="sp-logo-text">TabPlusPlus</span>
+        </div>
+        <h1 class="sp-title">Settings</h1>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <main class="sp-main">
+      <div class="sp-content">
+
+        <!-- General Section -->
+        <section class="sp-section">
+          <h2 class="sp-section-title">General</h2>
+          <label class="sp-item">
+            <span class="sp-item-label">Remember last view (Tabs / Bookmarks)</span>
+            <input type="checkbox" id="settingRememberView" class="sp-toggle" />
+          </label>
+          <label class="sp-item">
+            <span class="sp-item-label">Remember filter &amp; sort preferences</span>
+            <input type="checkbox" id="settingRememberFilters" class="sp-toggle" />
+          </label>
+        </section>
+
+        <!-- Bookmarks Section -->
+        <section class="sp-section">
+          <h2 class="sp-section-title">Bookmarks</h2>
+          <div class="sp-item">
+            <span class="sp-item-label">Default view mode</span>
+            <div class="sp-radio-group">
+              <label class="sp-radio-label">
+                <input type="radio" name="bookmarkViewMode" value="flat" id="bmViewFlat" />
+                <span>Folder</span>
+              </label>
+              <label class="sp-radio-label">
+                <input type="radio" name="bookmarkViewMode" value="tree" id="bmViewTree" />
+                <span>Tree</span>
+              </label>
+            </div>
+          </div>
+          <label class="sp-item">
+            <span class="sp-item-label">Show recent bookmarks section</span>
+            <input type="checkbox" id="settingShowRecent" class="sp-toggle" />
+          </label>
+          <div class="sp-item" id="recentCountRow">
+            <span class="sp-item-label">Recent bookmarks count</span>
+            <input type="number" id="settingRecentCount" min="1" max="20" class="sp-number-input" />
+          </div>
+        </section>
+
+        <!-- Display Section -->
+        <section class="sp-section">
+          <h2 class="sp-section-title">Display</h2>
+          <label class="sp-item">
+            <span class="sp-item-label">
+              Floating mode
+              <span class="sp-item-hint">Sidebar collapses to a thin strip; hover or click the edge to expand</span>
+            </span>
+            <input type="checkbox" id="settingAutoHide" class="sp-toggle" />
+          </label>
+          <div class="sp-item" id="autoHideDelayRow">
+            <span class="sp-item-label">Auto-collapse delay (seconds)</span>
+            <input type="number" id="settingAutoHideDelay" min="1" max="60" class="sp-number-input" />
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Actions -->
+      <div class="sp-actions">
+        <div class="sp-actions-inner">
+          <button class="sp-btn sp-btn-secondary" id="btnReset">Reset to Defaults</button>
+          <button class="sp-btn sp-btn-primary" id="btnSave">Save Settings</button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Toast -->
+    <div class="sp-toast-container" id="toastContainer"></div>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

@@ -13,6 +13,8 @@ const DEFAULT_SETTINGS = {
   recentBookmarksCount: 5,
 };
 
+const OPEN_ALL_CONFIRM_THRESHOLD = 10;
+
 // ─── State ──────────────────────────────────────────────────────────────────
 const state = {
   view: 'tabs',           // 'tabs' | 'bookmarks'
@@ -90,18 +92,8 @@ async function init() {
   $('btnCancelBookmark').addEventListener('click', hideAddBookmarkForm);
   $('btnBookmarkView').addEventListener('click', toggleBookmarkViewMode);
 
-  // Settings modal
+  // Settings button – opens dedicated settings page
   $('btnSettings').addEventListener('click', openSettings);
-  $('btnCloseSettings').addEventListener('click', closeSettings);
-  $('btnCancelSettings').addEventListener('click', closeSettings);
-  $('btnSaveSettings').addEventListener('click', saveSettings);
-  $('settingsModal').addEventListener('click', (e) => { if (e.target === $('settingsModal')) closeSettings(); });
-  $('settingShowRecent').addEventListener('change', (e) => {
-    $('recentCountRow').style.display = e.target.checked ? '' : 'none';
-  });
-  $('settingAutoHide').addEventListener('change', (e) => {
-    $('autoHideDelayRow').style.display = e.target.checked ? '' : 'none';
-  });
 
   // Context menu
   $('ctxOpen').addEventListener('click', ctxOpen);
@@ -120,8 +112,17 @@ async function init() {
   // Listen for background messages (tab events)
   chrome.runtime.onMessage.addListener(onBackgroundMessage);
 
-  // Setup auto-hide / compact mode
-  setupAutoHide();
+  // React to settings changes made in the separate settings page
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.settings) {
+      const prev = { ...state.settings };
+      state.settings = { ...DEFAULT_SETTINGS, ...changes.settings.newValue };
+      onSettingsChanged(prev);
+    }
+  });
+
+  // Setup floating mode (auto-hide)
+  setupFloatingMode();
 
   // Start in saved view
   if (state.view === 'bookmarks') {
@@ -1102,111 +1103,90 @@ async function persistPreferences() {
 }
 
 function openSettings() {
-  const s = state.settings;
-  $('settingRememberView').checked = s.rememberLastView;
-  $('settingRememberFilters').checked = s.rememberFilters;
-  $('settingAutoHide').checked = s.autoHide;
-  $('settingAutoHideDelay').value = s.autoHideDelay;
-  $('settingShowRecent').checked = s.showRecentBookmarks;
-  $('settingRecentCount').value = s.recentBookmarksCount;
-  document.querySelector(`input[name="bookmarkViewMode"][value="${s.bookmarkViewMode}"]`).checked = true;
-  $('autoHideDelayRow').style.display = s.autoHide ? '' : 'none';
-  $('recentCountRow').style.display = s.showRecentBookmarks ? '' : 'none';
-  $('settingsModal').classList.remove('hidden');
+  chrome.tabs.create({ url: chrome.runtime.getURL('settings.html') });
 }
 
-function closeSettings() {
-  $('settingsModal').classList.add('hidden');
-}
-
-async function saveSettings() {
-  const prev = { ...state.settings };
-  state.settings.rememberLastView = $('settingRememberView').checked;
-  state.settings.rememberFilters = $('settingRememberFilters').checked;
-  state.settings.autoHide = $('settingAutoHide').checked;
-  state.settings.autoHideDelay = parseInt($('settingAutoHideDelay').value, 10) || 3;
-  state.settings.showRecentBookmarks = $('settingShowRecent').checked;
-  state.settings.recentBookmarksCount = parseInt($('settingRecentCount').value, 10) || 5;
-  state.settings.bookmarkViewMode = document.querySelector('input[name="bookmarkViewMode"]:checked')?.value || 'flat';
-
-  await chrome.storage.local.set({ settings: state.settings });
-  closeSettings();
-
-  // Apply changes
+// ─── React to settings changes (from separate settings page) ─────────────────
+function onSettingsChanged(prev) {
   if (state.settings.bookmarkViewMode !== prev.bookmarkViewMode) {
     state.bookmarkViewMode = state.settings.bookmarkViewMode;
     updateBookmarkViewButton();
     if (state.view === 'bookmarks') loadBookmarks();
   }
   if (state.settings.autoHide !== prev.autoHide || state.settings.autoHideDelay !== prev.autoHideDelay) {
-    setupAutoHide();
+    setupFloatingMode();
   }
-  showToast('Settings saved', 'success');
 }
 
-// ─── Auto-hide / Compact Mode ────────────────────────────────────────────────
-const OPEN_ALL_CONFIRM_THRESHOLD = 10;
-const AUTO_HIDE_MOUSE_LEAVE_DELAY = 800; // ms delay when mouse leaves panel
+// ─── Floating Mode (auto-hide with edge trigger) ─────────────────────────────
+const FLOAT_COLLAPSE_DELAY = 800; // ms after mouse leaves before collapsing
 
-let _autoHideTimer = null;
-let _autoHideListenersAttached = false;
+let _floatTimer = null;
+let _floatListenersAttached = false;
 
-// Persistent handler refs so we can remove them
-function _onAutoHideActivity() {
+function _onFloatActivity() {
   if (!state.settings.autoHide) return;
-  document.body.classList.remove('compact-mode');
-  _startAutoHideTimer();
-}
-function _onAutoHideLeave() {
-  if (!state.settings.autoHide) return;
-  clearTimeout(_autoHideTimer);
-  _autoHideTimer = setTimeout(() => {
-    document.body.classList.add('compact-mode');
-  }, AUTO_HIDE_MOUSE_LEAVE_DELAY);
-}
-function _onAutoHideEnter() {
-  if (!state.settings.autoHide) return;
-  document.body.classList.remove('compact-mode');
-  _startAutoHideTimer();
+  document.body.classList.remove('float-collapsed');
+  _startFloatTimer();
 }
 
-function _startAutoHideTimer() {
-  clearTimeout(_autoHideTimer);
+function _onFloatLeave() {
+  if (!state.settings.autoHide) return;
+  clearTimeout(_floatTimer);
+  // Use the shorter of: a quick leave delay (for responsiveness) or the user setting
+  const leaveDelay = Math.min((state.settings.autoHideDelay || 3) * 1000, FLOAT_COLLAPSE_DELAY);
+  _floatTimer = setTimeout(() => {
+    document.body.classList.add('float-collapsed');
+  }, leaveDelay);
+}
+
+function _onFloatEnter() {
+  if (!state.settings.autoHide) return;
+  document.body.classList.remove('float-collapsed');
+  _startFloatTimer();
+}
+
+function _startFloatTimer() {
+  clearTimeout(_floatTimer);
   const delay = (state.settings.autoHideDelay || 3) * 1000;
-  _autoHideTimer = setTimeout(() => {
-    document.body.classList.add('compact-mode');
+  _floatTimer = setTimeout(() => {
+    document.body.classList.add('float-collapsed');
   }, delay);
 }
 
-function setupAutoHide() {
-  document.body.classList.remove('compact-mode');
-  clearTimeout(_autoHideTimer);
+function setupFloatingMode() {
+  document.body.classList.remove('float-collapsed');
+  clearTimeout(_floatTimer);
 
   if (!state.settings.autoHide) {
-    document.body.classList.remove('auto-hide-enabled');
-    // Remove listeners if they were previously added
-    if (_autoHideListenersAttached) {
-      document.body.removeEventListener('mousemove', _onAutoHideActivity);
-      document.body.removeEventListener('click', _onAutoHideActivity);
-      document.body.removeEventListener('mouseleave', _onAutoHideLeave);
-      document.body.removeEventListener('mouseenter', _onAutoHideEnter);
-      _autoHideListenersAttached = false;
+    document.body.classList.remove('float-mode-enabled');
+    if (_floatListenersAttached) {
+      document.querySelector('.panel-wrapper').removeEventListener('mousemove', _onFloatActivity);
+      document.querySelector('.panel-wrapper').removeEventListener('click', _onFloatActivity);
+      document.querySelector('.panel-wrapper').removeEventListener('mouseleave', _onFloatLeave);
+      document.querySelector('.panel-wrapper').removeEventListener('mouseenter', _onFloatEnter);
+      $('floatTrigger').removeEventListener('click', _onFloatEnter);
+      $('floatTrigger').removeEventListener('mouseenter', _onFloatEnter);
+      _floatListenersAttached = false;
     }
     return;
   }
 
-  document.body.classList.add('auto-hide-enabled');
+  document.body.classList.add('float-mode-enabled');
 
-  // Only attach listeners once
-  if (!_autoHideListenersAttached) {
-    document.body.addEventListener('mousemove', _onAutoHideActivity);
-    document.body.addEventListener('click', _onAutoHideActivity);
-    document.body.addEventListener('mouseleave', _onAutoHideLeave);
-    document.body.addEventListener('mouseenter', _onAutoHideEnter);
-    _autoHideListenersAttached = true;
+  if (!_floatListenersAttached) {
+    const wrapper = document.querySelector('.panel-wrapper');
+    wrapper.addEventListener('mousemove', _onFloatActivity);
+    wrapper.addEventListener('click', _onFloatActivity);
+    wrapper.addEventListener('mouseleave', _onFloatLeave);
+    wrapper.addEventListener('mouseenter', _onFloatEnter);
+    // Clicking or hovering the trigger strip expands the panel
+    $('floatTrigger').addEventListener('click', _onFloatEnter);
+    $('floatTrigger').addEventListener('mouseenter', _onFloatEnter);
+    _floatListenersAttached = true;
   }
 
-  _startAutoHideTimer();
+  _startFloatTimer();
 }
 
 // ─── Context Menu ────────────────────────────────────────────────────────────

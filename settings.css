@@ -1,0 +1,263 @@
+/* =====================================================
+   TabPlusPlus – Settings Page Styles
+   ===================================================== */
+
+/* --- CSS Variables (Light Theme) ------------------- */
+:root {
+  --primary: #667eea;
+  --primary-dark: #5a6fd6;
+  --primary-light: #e8ecff;
+  --accent: #764ba2;
+  --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+
+  --bg: #f7f8fc;
+  --bg-card: #ffffff;
+  --bg-hover: #f0f2ff;
+
+  --text-primary: #1a1d2e;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  --text-on-primary: #ffffff;
+
+  --border: #e5e7eb;
+  --border-focus: #667eea;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.08);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.10);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --danger: #ef4444;
+  --danger-light: #fee2e2;
+  --success: #10b981;
+  --success-light: #d1fae5;
+
+  --transition: 0.18s ease;
+}
+
+/* --- Dark Mode ------------------------------------ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12131f;
+    --bg-card: #1c1d2e;
+    --bg-hover: #232440;
+
+    --text-primary: #e8eaf6;
+    --text-secondary: #9fa3c7;
+    --text-muted: #6c6f94;
+
+    --border: #2a2d4a;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,.3);
+    --shadow-md: 0 4px 12px rgba(0,0,0,.4);
+
+    --primary-light: #232440;
+  }
+}
+
+/* --- Reset & Base --------------------------------- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  background: var(--bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+/* --- Layout --------------------------------------- */
+.settings-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Header --------------------------------------- */
+.sp-header {
+  background: var(--gradient);
+  box-shadow: var(--shadow-md);
+  flex-shrink: 0;
+}
+
+.sp-header-inner {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 18px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.sp-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sp-logo-icon {
+  width: 32px; height: 32px;
+  background: rgba(255,255,255,.2);
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 12px; color: #fff;
+  letter-spacing: -.5px;
+  border: 1px solid rgba(255,255,255,.3);
+}
+
+.sp-logo-text {
+  font-size: 16px; font-weight: 700;
+  color: #fff; letter-spacing: .2px;
+}
+
+.sp-title {
+  font-size: 20px; font-weight: 600;
+  color: rgba(255,255,255,.9);
+  margin-left: 4px;
+}
+
+/* --- Main ----------------------------------------- */
+.sp-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 32px 24px 0;
+}
+
+/* --- Content -------------------------------------- */
+.sp-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* --- Section -------------------------------------- */
+.sp-section {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.sp-section-title {
+  font-size: 11px; font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: .7px;
+  padding: 14px 20px 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* --- Setting Item --------------------------------- */
+.sp-item {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 20px; padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  cursor: default;
+  transition: background var(--transition);
+}
+
+.sp-item:last-child { border-bottom: none; }
+.sp-item:hover { background: var(--bg-hover); }
+
+.sp-item-label {
+  font-size: 14px; color: var(--text-primary);
+  display: flex; flex-direction: column; gap: 3px;
+  flex: 1;
+}
+
+.sp-item-hint {
+  font-size: 12px; color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* --- Toggle (checkbox) ---------------------------- */
+.sp-toggle {
+  width: 18px; height: 18px; flex-shrink: 0;
+  accent-color: var(--primary); cursor: pointer;
+}
+
+/* --- Number Input --------------------------------- */
+.sp-number-input {
+  width: 70px; background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 10px; font-size: 13px;
+  color: var(--text-primary); outline: none; text-align: center;
+  transition: border-color var(--transition);
+  flex-shrink: 0;
+}
+.sp-number-input:focus { border-color: var(--border-focus); }
+
+/* --- Radio Group ---------------------------------- */
+.sp-radio-group {
+  display: flex; gap: 16px; flex-shrink: 0;
+}
+
+.sp-radio-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; cursor: pointer; color: var(--text-primary);
+}
+
+.sp-radio-label input[type="radio"] {
+  accent-color: var(--primary); cursor: pointer;
+  width: 15px; height: 15px;
+}
+
+/* --- Actions -------------------------------------- */
+.sp-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding: 16px 0;
+  margin-top: 24px;
+}
+
+.sp-actions-inner {
+  display: flex; justify-content: flex-end; gap: 10px;
+}
+
+/* --- Buttons -------------------------------------- */
+.sp-btn {
+  padding: 10px 24px; font-size: 14px; font-weight: 600;
+  border-radius: var(--radius-sm); border: none; cursor: pointer;
+  transition: opacity var(--transition), box-shadow var(--transition);
+}
+
+.sp-btn-primary {
+  background: var(--gradient); color: #fff;
+  box-shadow: 0 2px 8px rgba(102,126,234,.3);
+}
+.sp-btn-primary:hover { opacity: .9; box-shadow: 0 4px 14px rgba(102,126,234,.45); }
+
+.sp-btn-secondary {
+  background: var(--bg-card); color: var(--text-secondary);
+  border: 1.5px solid var(--border);
+}
+.sp-btn-secondary:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-light); }
+
+/* --- Toast ---------------------------------------- */
+.sp-toast-container {
+  position: fixed; bottom: 24px; right: 24px;
+  display: flex; flex-direction: column; gap: 8px; z-index: 9999;
+}
+
+.sp-toast {
+  background: var(--text-primary); color: var(--bg-card);
+  padding: 10px 18px; border-radius: var(--radius-md);
+  font-size: 13px; font-weight: 500; box-shadow: var(--shadow-md);
+  animation: spFadeIn 0.2s ease;
+}
+
+.sp-toast.success { background: var(--success); color: #fff; }
+.sp-toast.fade-out { animation: spFadeOut 0.3s ease forwards; }
+
+@keyframes spFadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spFadeOut { to { opacity: 0; transform: translateY(8px); } }
+
+/* --- Hidden ---------------------------------------- */
+.hidden { display: none !important; }
