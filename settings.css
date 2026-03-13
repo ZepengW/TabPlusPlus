@@ -176,6 +176,19 @@ html, body {
   font-weight: 400;
 }
 
+.sp-item-hint a, .sp-item-info a {
+  color: var(--primary); text-decoration: none;
+}
+.sp-item-hint a:hover, .sp-item-info a:hover { text-decoration: underline; }
+
+/* Info-only row (no toggle) */
+.sp-item-info {
+  display: block;
+  padding: 10px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-hover);
+}
+
 /* --- Toggle (checkbox) ---------------------------- */
 .sp-toggle {
   width: 18px; height: 18px; flex-shrink: 0;

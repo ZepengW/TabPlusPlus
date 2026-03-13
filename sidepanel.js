@@ -2,23 +2,14 @@
 
 'use strict';
 
-// ─── Overlay mode detection ───────────────────────────────────────────────────
-// When loaded inside the content-script iframe the URL carries ?overlay=1.
-// The window.self !== window.top check is a belt-and-braces fallback for cases
-// where the URL parameter might be stripped (e.g. some security-focused pages
-// rewrite extension URLs); it should never be the primary discriminator.
-const IS_OVERLAY = (new URLSearchParams(window.location.search).get('overlay') === '1') ||
-                   (window.self !== window.top);
-
 // ─── Default Settings ────────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
   rememberLastView: true,
   rememberFilters: true,
-  autoHide: false,
-  autoHideDelay: 3,          // seconds
   bookmarkViewMode: 'flat',  // 'flat' | 'tree'
   showRecentBookmarks: true,
   recentBookmarksCount: 5,
+  enableTabNavShortcut: false, // enable keyboard shortcut for tab navigation in panel order
 };
 
 const OPEN_ALL_CONFIRM_THRESHOLD = 10;
@@ -123,23 +114,16 @@ async function init() {
   // React to settings changes made in the separate settings page
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.settings) {
-      const prev = { ...state.settings };
       state.settings = { ...DEFAULT_SETTINGS, ...changes.settings.newValue };
-      onSettingsChanged(prev);
+      onSettingsChanged();
     }
   });
 
-  // Overlay mode: apply body class, wire up close button, load compact stats
-  if (IS_OVERLAY) {
-    document.body.classList.add('overlay-mode');
-    $('btnOverlayClose').addEventListener('click', () => {
-      window.parent.postMessage('TABPLUSPLUS_CLOSE', '*');
-    });
-    loadOverlayStats();
-  } else {
-    // Setup floating mode (auto-hide) only for the native side panel
-    setupFloatingMode();
-  }
+  // Mark panel as open in session storage so background can respond to keyboard commands
+  chrome.storage.session.set({ sidePanelOpen: true }).catch(() => {});
+  window.addEventListener('unload', () => {
+    chrome.storage.session.set({ sidePanelOpen: false }).catch(() => {});
+  });
 
   // Start in saved view
   if (state.view === 'bookmarks') {
@@ -180,6 +164,12 @@ function renderTabView() {
   let tabs = filterTabs(state.tabs);
   tabs = sortTabs(tabs);
   state.filteredTabs = tabs;
+
+  // Keep session storage up to date for keyboard-shortcut tab navigation
+  chrome.storage.session.set({
+    panelTabOrder: tabs.map((t) => t.id),
+    enableTabNavShortcut: state.settings.enableTabNavShortcut,
+  }).catch(() => {});
 
   if (tabs.length === 0) {
     tabList.innerHTML = '';
@@ -1124,103 +1114,15 @@ function openSettings() {
 }
 
 // ─── React to settings changes (from separate settings page) ─────────────────
-function onSettingsChanged(prev) {
-  if (state.settings.bookmarkViewMode !== prev.bookmarkViewMode) {
-    state.bookmarkViewMode = state.settings.bookmarkViewMode;
+function onSettingsChanged() {
+  const newViewMode = state.settings.bookmarkViewMode;
+  if (newViewMode !== state.bookmarkViewMode) {
+    state.bookmarkViewMode = newViewMode;
     updateBookmarkViewButton();
     if (state.view === 'bookmarks') loadBookmarks();
   }
-  if (!IS_OVERLAY &&
-      (state.settings.autoHide !== prev.autoHide || state.settings.autoHideDelay !== prev.autoHideDelay)) {
-    setupFloatingMode();
-  }
-}
-
-// ─── Overlay stats (compact tab / window counts shown in the overlay header) ──
-async function loadOverlayStats() {
-  try {
-    const [tabs, windows] = await Promise.all([
-      chrome.tabs.query({}),
-      chrome.windows.getAll(),
-    ]);
-    const tEl = $('statTabCount');
-    const wEl = $('statWinCount');
-    if (tEl) tEl.textContent = tabs.length + (tabs.length === 1 ? ' tab' : ' tabs');
-    if (wEl) wEl.textContent = windows.length + (windows.length === 1 ? ' win' : ' wins');
-  } catch (e) {
-    console.debug('TabPlusPlus: loadOverlayStats failed', e);
-  }
-}
-
-// ─── Floating Mode (auto-hide with edge trigger) ─────────────────────────────
-const FLOAT_COLLAPSE_DELAY = 800; // ms after mouse leaves before collapsing
-
-let _floatTimer = null;
-let _floatListenersAttached = false;
-
-function _onFloatActivity() {
-  if (!state.settings.autoHide) return;
-  document.body.classList.remove('float-collapsed');
-  _startFloatTimer();
-}
-
-function _onFloatLeave() {
-  if (!state.settings.autoHide) return;
-  clearTimeout(_floatTimer);
-  // Use the shorter of: a quick leave delay (for responsiveness) or the user setting
-  const leaveDelay = Math.min((state.settings.autoHideDelay || 3) * 1000, FLOAT_COLLAPSE_DELAY);
-  _floatTimer = setTimeout(() => {
-    document.body.classList.add('float-collapsed');
-  }, leaveDelay);
-}
-
-function _onFloatEnter() {
-  if (!state.settings.autoHide) return;
-  document.body.classList.remove('float-collapsed');
-  _startFloatTimer();
-}
-
-function _startFloatTimer() {
-  clearTimeout(_floatTimer);
-  const delay = (state.settings.autoHideDelay || 3) * 1000;
-  _floatTimer = setTimeout(() => {
-    document.body.classList.add('float-collapsed');
-  }, delay);
-}
-
-function setupFloatingMode() {
-  document.body.classList.remove('float-collapsed');
-  clearTimeout(_floatTimer);
-
-  if (!state.settings.autoHide) {
-    document.body.classList.remove('float-mode-enabled');
-    if (_floatListenersAttached) {
-      document.querySelector('.panel-wrapper').removeEventListener('mousemove', _onFloatActivity);
-      document.querySelector('.panel-wrapper').removeEventListener('click', _onFloatActivity);
-      document.querySelector('.panel-wrapper').removeEventListener('mouseleave', _onFloatLeave);
-      document.querySelector('.panel-wrapper').removeEventListener('mouseenter', _onFloatEnter);
-      $('floatTrigger').removeEventListener('click', _onFloatEnter);
-      $('floatTrigger').removeEventListener('mouseenter', _onFloatEnter);
-      _floatListenersAttached = false;
-    }
-    return;
-  }
-
-  document.body.classList.add('float-mode-enabled');
-
-  if (!_floatListenersAttached) {
-    const wrapper = document.querySelector('.panel-wrapper');
-    wrapper.addEventListener('mousemove', _onFloatActivity);
-    wrapper.addEventListener('click', _onFloatActivity);
-    wrapper.addEventListener('mouseleave', _onFloatLeave);
-    wrapper.addEventListener('mouseenter', _onFloatEnter);
-    // Clicking or hovering the trigger strip expands the panel
-    $('floatTrigger').addEventListener('click', _onFloatEnter);
-    $('floatTrigger').addEventListener('mouseenter', _onFloatEnter);
-    _floatListenersAttached = true;
-  }
-
-  _startFloatTimer();
+  // Update session storage with latest enableTabNavShortcut flag
+  chrome.storage.session.set({ enableTabNavShortcut: state.settings.enableTabNavShortcut }).catch(() => {});
 }
 
 // ─── Context Menu ────────────────────────────────────────────────────────────
@@ -1283,7 +1185,6 @@ function onBackgroundMessage(message) {
     case 'TAB_UPDATED':
     case 'TAB_MOVED':
       if (state.view === 'tabs') loadTabs();
-      if (IS_OVERLAY) loadOverlayStats();
       break;
     case 'TAB_ACTIVATED':
       if (state.view === 'tabs') refreshActiveState(message.activeInfo);
@@ -1294,7 +1195,6 @@ function onBackgroundMessage(message) {
       break;
     case 'DUPLICATES_CLOSED':
       if (state.view === 'tabs') loadTabs();
-      if (IS_OVERLAY) loadOverlayStats();
       showToast(`Closed ${message.count} duplicate${message.count !== 1 ? 's' : ''}`, 'success');
       break;
     case 'SESSION_SAVED':

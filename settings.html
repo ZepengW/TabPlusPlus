@@ -62,19 +62,22 @@
           </div>
         </section>
 
-        <!-- Display Section -->
+        <!-- Keyboard Shortcuts Section -->
         <section class="sp-section">
-          <h2 class="sp-section-title">Display</h2>
+          <h2 class="sp-section-title">Keyboard Shortcuts</h2>
           <label class="sp-item">
             <span class="sp-item-label">
-              Auto-hide overlay
-              <span class="sp-item-hint">The floating panel auto-collapses to the edge trigger after a delay; hover or click the edge strip to re-expand</span>
+              Enable sidebar tab navigation shortcuts
+              <span class="sp-item-hint">Navigate tabs in sidebar order using custom keyboard shortcuts (configure at <a href="#" id="shortcutSettingsLink">chrome://extensions/shortcuts</a>)</span>
             </span>
-            <input type="checkbox" id="settingAutoHide" class="sp-toggle" />
+            <input type="checkbox" id="settingTabNavShortcut" class="sp-toggle" />
           </label>
-          <div class="sp-item" id="autoHideDelayRow">
-            <span class="sp-item-label">Auto-collapse delay (seconds)</span>
-            <input type="number" id="settingAutoHideDelay" min="1" max="60" class="sp-number-input" />
+          <div class="sp-item sp-item-info" id="shortcutInfoRow">
+            <span class="sp-item-label">
+              Assign shortcuts for <strong>Switch to next tab in sidebar order</strong> and <strong>Switch to previous tab in sidebar order</strong> at
+              <a href="#" id="shortcutSettingsLink2">chrome://extensions/shortcuts</a>.
+              <br/>Note: Ctrl+Tab and Ctrl+Shift+Tab are reserved by the browser and cannot be reassigned to extensions.
+            </span>
           </div>
         </section>
 
