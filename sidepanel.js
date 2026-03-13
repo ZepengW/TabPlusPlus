@@ -2,6 +2,14 @@
 
 'use strict';
 
+// ─── Overlay mode detection ───────────────────────────────────────────────────
+// When loaded inside the content-script iframe the URL carries ?overlay=1.
+// The window.self !== window.top check is a belt-and-braces fallback for cases
+// where the URL parameter might be stripped (e.g. some security-focused pages
+// rewrite extension URLs); it should never be the primary discriminator.
+const IS_OVERLAY = (new URLSearchParams(window.location.search).get('overlay') === '1') ||
+                   (window.self !== window.top);
+
 // ─── Default Settings ────────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
   rememberLastView: true,
@@ -121,8 +129,17 @@ async function init() {
     }
   });
 
-  // Setup floating mode (auto-hide)
-  setupFloatingMode();
+  // Overlay mode: apply body class, wire up close button, load compact stats
+  if (IS_OVERLAY) {
+    document.body.classList.add('overlay-mode');
+    $('btnOverlayClose').addEventListener('click', () => {
+      window.parent.postMessage('TABPLUSPLUS_CLOSE', '*');
+    });
+    loadOverlayStats();
+  } else {
+    // Setup floating mode (auto-hide) only for the native side panel
+    setupFloatingMode();
+  }
 
   // Start in saved view
   if (state.view === 'bookmarks') {
@@ -1113,8 +1130,25 @@ function onSettingsChanged(prev) {
     updateBookmarkViewButton();
     if (state.view === 'bookmarks') loadBookmarks();
   }
-  if (state.settings.autoHide !== prev.autoHide || state.settings.autoHideDelay !== prev.autoHideDelay) {
+  if (!IS_OVERLAY &&
+      (state.settings.autoHide !== prev.autoHide || state.settings.autoHideDelay !== prev.autoHideDelay)) {
     setupFloatingMode();
+  }
+}
+
+// ─── Overlay stats (compact tab / window counts shown in the overlay header) ──
+async function loadOverlayStats() {
+  try {
+    const [tabs, windows] = await Promise.all([
+      chrome.tabs.query({}),
+      chrome.windows.getAll(),
+    ]);
+    const tEl = $('statTabCount');
+    const wEl = $('statWinCount');
+    if (tEl) tEl.textContent = tabs.length + (tabs.length === 1 ? ' tab' : ' tabs');
+    if (wEl) wEl.textContent = windows.length + (windows.length === 1 ? ' win' : ' wins');
+  } catch (e) {
+    console.debug('TabPlusPlus: loadOverlayStats failed', e);
   }
 }
 
@@ -1249,6 +1283,7 @@ function onBackgroundMessage(message) {
     case 'TAB_UPDATED':
     case 'TAB_MOVED':
       if (state.view === 'tabs') loadTabs();
+      if (IS_OVERLAY) loadOverlayStats();
       break;
     case 'TAB_ACTIVATED':
       if (state.view === 'tabs') refreshActiveState(message.activeInfo);
@@ -1256,6 +1291,14 @@ function onBackgroundMessage(message) {
     case 'BOOKMARK_ADDED':
       loadBookmarkCount();
       if (state.view === 'bookmarks') loadBookmarks();
+      break;
+    case 'DUPLICATES_CLOSED':
+      if (state.view === 'tabs') loadTabs();
+      if (IS_OVERLAY) loadOverlayStats();
+      showToast(`Closed ${message.count} duplicate${message.count !== 1 ? 's' : ''}`, 'success');
+      break;
+    case 'SESSION_SAVED':
+      showToast(`Session saved (${message.count} tab${message.count !== 1 ? 's' : ''})`, 'success');
       break;
   }
 }

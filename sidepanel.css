@@ -135,6 +135,44 @@ body.float-collapsed .panel-wrapper {
   transform: translateX(100%);
 }
 
+/* --- Overlay mode (floating iframe over the page) - */
+/* When the panel runs inside the content-script iframe the body carries the
+   overlay-mode class.  In this context the Chrome side-panel chrome-frame is
+   not used, so the slide-off animation is meaningless and must be suppressed. */
+body.overlay-mode .panel-wrapper {
+  transform: none !important;
+  transition: none;
+  border-radius: 14px;
+}
+
+/* Hide the side-panel-specific edge trigger in overlay mode */
+body.overlay-mode .float-trigger { display: none; }
+
+/* Show overlay-only elements (e.g. close button) */
+.overlay-only { display: none; }
+body.overlay-mode .overlay-only { display: flex; }
+
+/* --- Header stats (overlay mode) ------------------ */
+.header-stats {
+  display: none;
+  gap: 4px;
+  align-items: center;
+  flex: 1;
+  justify-content: center;
+}
+body.overlay-mode .header-stats { display: flex; }
+
+.stat-chip {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255,255,255,.85);
+  background: rgba(255,255,255,.15);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+  white-space: nowrap;
+  border: 1px solid rgba(255,255,255,.25);
+}
+
 /* --- Scrollbars ----------------------------------- */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--scrollbar-track); }
