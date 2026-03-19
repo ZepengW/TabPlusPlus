@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TabPlusPlus",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "智能一体化的Tab管理插件 - Smart all-in-one tab management extension",
   "permissions": [
     "tabs",
@@ -10,15 +10,14 @@
     "sessions",
     "contextMenus",
     "activeTab",
-    "sidePanel",
-    "scripting"
+    "sidePanel"
   ],
-  "host_permissions": ["<all_urls>"],
+  "host_permissions": [],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "TabPlusPlus – click to toggle",
+    "default_title": "TabPlusPlus – click to open/close side panel",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -28,19 +27,14 @@
   "side_panel": {
     "default_path": "sidepanel.html"
   },
-  "content_scripts": [
-    {
-      "matches": ["http://*/*", "https://*/*"],
-      "js": ["content.js"],
-      "run_at": "document_idle"
+  "commands": {
+    "navigate-tab-next": {
+      "description": "Switch to next tab in sidebar order"
+    },
+    "navigate-tab-prev": {
+      "description": "Switch to previous tab in sidebar order"
     }
-  ],
-  "web_accessible_resources": [
-    {
-      "resources": ["sidepanel.html", "sidepanel.js", "sidepanel.css"],
-      "matches": ["http://*/*", "https://*/*"]
-    }
-  ],
+  },
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",

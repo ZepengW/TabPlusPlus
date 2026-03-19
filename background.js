@@ -1,42 +1,8 @@
 // background.js - Service Worker for TabPlusPlus
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function isRestrictedPage(url) {
-  if (!url) return true;
-  return (
-    url.startsWith('chrome://') ||
-    url.startsWith('chrome-extension://') ||
-    url.startsWith('about:') ||
-    url.startsWith('edge://')
-  );
-}
-
-// ─── Action icon click: toggle overlay in the active tab ─────────────────────
-// The popup has been removed; the icon click now shows/hides the floating panel.
-chrome.action.onClicked.addListener(async (tab) => {
-  if (!tab.id || isRestrictedPage(tab.url)) {
-    // Fallback for restricted pages (chrome://, about:, etc.)
-    await chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
-    return;
-  }
-  try {
-    await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY' });
-  } catch {
-    // Content script not yet active on this tab – inject it first
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ['content.js'],
-      });
-      await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY' });
-    } catch (e) {
-      console.warn('TabPlusPlus: could not inject overlay', e);
-    }
-  }
-});
-
-// Prevent the side panel from auto-opening when the action icon is clicked
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+// ─── Action icon click: toggle the native Chrome side panel ──────────────────
+// openPanelOnActionClick: true lets Chrome handle the open/close toggle natively.
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
 // ─── Context menus ────────────────────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
@@ -65,23 +31,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // ─── Context menu clicks ──────────────────────────────────────────────────────
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === 'openTabPlusPlus') {
-    if (!tab.id || isRestrictedPage(tab.url)) {
-      await chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
-      return;
-    }
-    try {
-      await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY' });
-    } catch {
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['content.js'],
-        });
-        await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_OVERLAY' });
-      } catch (e) {
-        console.warn('TabPlusPlus: could not inject overlay', e);
-      }
-    }
+    await chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
   }
 
   if (info.menuItemId === 'addToBookmarks') {
@@ -141,11 +91,50 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   }
 });
 
-// ─── Broadcast a message to all extension contexts (side panel / overlay) ─────
+// ─── Broadcast a message to all extension contexts (side panel) ───────────────
 function notifySidePanel(message) {
   chrome.runtime.sendMessage(message).catch(() => {
     // No listeners open; ignore
   });
+}
+
+// ─── Keyboard commands ────────────────────────────────────────────────────────
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === 'navigate-tab-next') {
+    await navigateTabInPanelOrder(1);
+  } else if (command === 'navigate-tab-prev') {
+    await navigateTabInPanelOrder(-1);
+  }
+});
+
+async function navigateTabInPanelOrder(direction) {
+  try {
+    const data = await chrome.storage.session.get(['sidePanelOpen', 'panelTabOrder', 'enableTabNavShortcut']);
+    // Only act when the side panel is open and the feature is enabled
+    if (!data.sidePanelOpen || !data.enableTabNavShortcut) return;
+    const order = data.panelTabOrder;
+    if (!Array.isArray(order) || order.length === 0) return;
+
+    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!activeTab) return;
+
+    const currentIndex = order.indexOf(activeTab.id);
+    let nextIndex;
+    if (currentIndex === -1) {
+      nextIndex = direction === 1 ? 0 : order.length - 1;
+    } else {
+      nextIndex = (currentIndex + direction + order.length) % order.length;
+    }
+
+    const nextTabId = order[nextIndex];
+    const nextTab = await chrome.tabs.get(nextTabId).catch(() => null);
+    if (!nextTab) return;
+
+    await chrome.tabs.update(nextTabId, { active: true });
+    await chrome.windows.update(nextTab.windowId, { focused: true });
+  } catch (e) {
+    console.debug('TabPlusPlus: navigateTabInPanelOrder failed', e);
+  }
 }
 
 // ─── Tab event listeners ──────────────────────────────────────────────────────
@@ -216,4 +205,3 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
-

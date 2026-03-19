@@ -5,11 +5,10 @@
 const DEFAULT_SETTINGS = {
   rememberLastView: true,
   rememberFilters: true,
-  autoHide: false,
-  autoHideDelay: 3,
   bookmarkViewMode: 'flat',
   showRecentBookmarks: true,
   recentBookmarksCount: 5,
+  enableTabNavShortcut: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -28,17 +27,15 @@ async function loadSettings() {
 }
 
 function applyToUI(s) {
-  $('settingRememberView').checked   = s.rememberLastView;
+  $('settingRememberView').checked    = s.rememberLastView;
   $('settingRememberFilters').checked = s.rememberFilters;
-  $('settingAutoHide').checked       = s.autoHide;
-  $('settingAutoHideDelay').value    = s.autoHideDelay;
-  $('settingShowRecent').checked     = s.showRecentBookmarks;
-  $('settingRecentCount').value      = s.recentBookmarksCount;
+  $('settingShowRecent').checked      = s.showRecentBookmarks;
+  $('settingRecentCount').value       = s.recentBookmarksCount;
+  $('settingTabNavShortcut').checked  = s.enableTabNavShortcut;
 
   const bmRadio = document.querySelector(`input[name="bookmarkViewMode"][value="${s.bookmarkViewMode}"]`);
   if (bmRadio) bmRadio.checked = true;
 
-  $('autoHideDelayRow').classList.toggle('hidden', !s.autoHide);
   $('recentCountRow').classList.toggle('hidden', !s.showRecentBookmarks);
 }
 
@@ -53,11 +50,10 @@ function readFromUI() {
   return {
     rememberLastView:    $('settingRememberView').checked,
     rememberFilters:     $('settingRememberFilters').checked,
-    autoHide:            $('settingAutoHide').checked,
-    autoHideDelay:       parseInt($('settingAutoHideDelay').value, 10) || 3,
     showRecentBookmarks: $('settingShowRecent').checked,
     recentBookmarksCount: parseInt($('settingRecentCount').value, 10) || 5,
     bookmarkViewMode:    document.querySelector('input[name="bookmarkViewMode"]:checked')?.value || 'flat',
+    enableTabNavShortcut: $('settingTabNavShortcut').checked,
   };
 }
 
@@ -74,12 +70,17 @@ function attachListeners() {
   $('btnSave').addEventListener('click', saveSettings);
   $('btnReset').addEventListener('click', resetSettings);
 
-  $('settingAutoHide').addEventListener('change', (e) => {
-    $('autoHideDelayRow').classList.toggle('hidden', !e.target.checked);
-  });
   $('settingShowRecent').addEventListener('change', (e) => {
     $('recentCountRow').classList.toggle('hidden', !e.target.checked);
   });
+
+  // Open chrome://extensions/shortcuts when user clicks the links
+  const openShortcutsPage = (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+  };
+  $('shortcutSettingsLink').addEventListener('click', openShortcutsPage);
+  $('shortcutSettingsLink2').addEventListener('click', openShortcutsPage);
 }
 
 // ─── Toast ───────────────────────────────────────────────────────────────────
