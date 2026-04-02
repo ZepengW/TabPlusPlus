@@ -224,6 +224,38 @@
     </div>
   </div>
 
+  <!-- Group Create/Edit Modal -->
+  <div class="modal-overlay hidden" id="groupModal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="groupModalTitle">新建分组</h3>
+        <button class="icon-btn" id="btnCloseGroupModal">✕</button>
+      </div>
+      <div class="form-group">
+        <label>分组名称</label>
+        <input type="text" id="groupNameInput" placeholder="分组名称（可选）" class="form-input" maxlength="50" />
+      </div>
+      <div class="form-group">
+        <label>颜色</label>
+        <div class="color-swatches" id="colorSwatches">
+          <div class="color-swatch active" data-color="blue" style="background:#1A73E8" title="蓝色"></div>
+          <div class="color-swatch" data-color="red" style="background:#D93025" title="红色"></div>
+          <div class="color-swatch" data-color="yellow" style="background:#F29900" title="黄色"></div>
+          <div class="color-swatch" data-color="green" style="background:#188038" title="绿色"></div>
+          <div class="color-swatch" data-color="pink" style="background:#E52592" title="粉色"></div>
+          <div class="color-swatch" data-color="purple" style="background:#8430CE" title="紫色"></div>
+          <div class="color-swatch" data-color="cyan" style="background:#007B83" title="青色"></div>
+          <div class="color-swatch" data-color="orange" style="background:#FA903E" title="橙色"></div>
+          <div class="color-swatch" data-color="grey" style="background:#9E9E9E" title="灰色"></div>
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-secondary" id="btnCancelGroup">取消</button>
+        <button class="btn-primary" id="btnConfirmGroup">确认</button>
+      </div>
+    </div>
+  </div>
+
   </div><!-- /.panel-wrapper -->
 
   <script src="sidepanel.js"></script>

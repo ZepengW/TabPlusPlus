@@ -142,6 +142,22 @@ chrome.tabs.onCreated.addListener((tab) => {
   notifySidePanel({ type: 'TAB_CREATED', tab });
 });
 
+// ─── Tab group event listeners ────────────────────────────────────────────────
+if (chrome.tabGroups) {
+  chrome.tabGroups.onCreated.addListener((group) => {
+    notifySidePanel({ type: 'TAB_GROUP_CREATED', group });
+  });
+  chrome.tabGroups.onUpdated.addListener((group) => {
+    notifySidePanel({ type: 'TAB_GROUP_UPDATED', group });
+  });
+  chrome.tabGroups.onRemoved.addListener((group) => {
+    notifySidePanel({ type: 'TAB_GROUP_REMOVED', group });
+  });
+  chrome.tabGroups.onMoved.addListener((group) => {
+    notifySidePanel({ type: 'TAB_GROUP_MOVED', group });
+  });
+}
+
 chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
   notifySidePanel({ type: 'TAB_REMOVED', tabId, removeInfo });
 });

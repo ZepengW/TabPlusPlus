@@ -13,6 +13,20 @@ const DEFAULT_SETTINGS = {
 };
 
 const OPEN_ALL_CONFIRM_THRESHOLD = 10;
+const UNNAMED_GROUP_LABEL = '未命名分组';
+
+// ─── Tab Group Color Map ──────────────────────────────────────────────────────
+const GROUP_COLORS = {
+  grey:   '#9E9E9E',
+  blue:   '#1A73E8',
+  red:    '#D93025',
+  yellow: '#F29900',
+  green:  '#188038',
+  pink:   '#E52592',
+  purple: '#8430CE',
+  cyan:   '#007B83',
+  orange: '#FA903E',
+};
 
 // ─── State ──────────────────────────────────────────────────────────────────
 const state = {
@@ -24,6 +38,10 @@ const state = {
   groupByDomain: false,   // group mode
   selectedTabs: new Set(),
   currentWindowId: null,
+
+  tabGroups: [],          // chrome.TabGroup[] – native Chrome tab groups
+  selectedGroupColor: 'blue', // color selected in group modal
+  groupModalTarget: null, // { group: TabGroup|null, tabIds: number[]|null }
 
   bookmarks: [],          // current folder nodes
   bookmarkPath: [{ id: '0', title: 'All Bookmarks' }],
@@ -108,6 +126,20 @@ async function init() {
   $('btnConfirmEdit').addEventListener('click', confirmEdit);
   editModal.addEventListener('click', (e) => { if (e.target === editModal) closeEditModal(); });
 
+  // Group modal
+  $('btnCloseGroupModal').addEventListener('click', hideGroupModal);
+  $('btnCancelGroup').addEventListener('click', hideGroupModal);
+  $('btnConfirmGroup').addEventListener('click', confirmGroupModal);
+  $('groupModal').addEventListener('click', (e) => { if (e.target === $('groupModal')) hideGroupModal(); });
+  $('colorSwatches').addEventListener('click', (e) => {
+    const swatch = e.target.closest('.color-swatch');
+    if (!swatch) return;
+    state.selectedGroupColor = swatch.dataset.color;
+    document.querySelectorAll('.color-swatch').forEach((s) =>
+      s.classList.toggle('active', s.dataset.color === state.selectedGroupColor)
+    );
+  });
+
   // Listen for background messages (tab events)
   chrome.runtime.onMessage.addListener(onBackgroundMessage);
 
@@ -153,8 +185,12 @@ function switchView(view) {
 // ─── Tab Management ──────────────────────────────────────────────────────────
 async function loadTabs() {
   showTabSkeleton(true);
-  const tabs = await chrome.tabs.query({});
+  const [tabs, tabGroups] = await Promise.all([
+    chrome.tabs.query({}),
+    chrome.tabGroups ? chrome.tabGroups.query({}).catch(() => []) : Promise.resolve([]),
+  ]);
   state.tabs = tabs;
+  state.tabGroups = tabGroups;
   tabCountBadge.textContent = tabs.length;
   renderTabView();
   showTabSkeleton(false);
@@ -178,7 +214,11 @@ function renderTabView() {
     return;
   }
 
-  if (state.groupByDomain) {
+  const hasNativeGroups = tabs.some((t) => t.groupId !== -1);
+
+  if (hasNativeGroups) {
+    renderWithNativeGroups(tabs);
+  } else if (state.groupByDomain) {
     renderGrouped(tabs);
   } else {
     const frag = document.createDocumentFragment();
@@ -248,11 +288,11 @@ function groupTabs(tabs) {
 }
 
 function renderGrouped(tabs) {
-  const groups = groupTabs(tabs);
+  const domainGroups = groupTabs(tabs);
   const frag = document.createDocumentFragment();
   const colors = ['#667eea','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316'];
   let colorIdx = 0;
-  groups.forEach((groupTabs, domain) => {
+  domainGroups.forEach((domainTabs, domain) => {
     const header = document.createElement('div');
     header.className = 'group-header';
     const dot = document.createElement('div');
@@ -263,13 +303,115 @@ function renderGrouped(tabs) {
     label.textContent = domain;
     const count = document.createElement('span');
     count.className = 'group-count';
-    count.textContent = groupTabs.length;
+    count.textContent = domainTabs.length;
     header.append(dot, label, count);
     frag.appendChild(header);
-    groupTabs.forEach((tab) => frag.appendChild(createTabItem(tab)));
+    domainTabs.forEach((tab) => frag.appendChild(createTabItem(tab)));
   });
   tabList.innerHTML = '';
   tabList.appendChild(frag);
+}
+
+function renderWithNativeGroups(tabs) {
+  // Split tabs into native-grouped and ungrouped
+  const groupMap = new Map(); // groupId → tab[]
+  const ungrouped = [];
+
+  tabs.forEach((tab) => {
+    if (tab.groupId !== -1) {
+      if (!groupMap.has(tab.groupId)) groupMap.set(tab.groupId, []);
+      groupMap.get(tab.groupId).push(tab);
+    } else {
+      ungrouped.push(tab);
+    }
+  });
+
+  const frag = document.createDocumentFragment();
+
+  // Render each native Chrome group
+  groupMap.forEach((groupTabs, groupId) => {
+    const group = state.tabGroups.find((g) => g.id === groupId) ||
+      { id: groupId, title: '', color: 'grey', collapsed: false };
+    frag.appendChild(createNativeGroupHeader(group, groupTabs.length));
+    if (!group.collapsed) {
+      groupTabs.forEach((tab) => frag.appendChild(createTabItem(tab)));
+    }
+  });
+
+  // Render ungrouped tabs below (with optional domain grouping)
+  if (ungrouped.length > 0) {
+    if (state.groupByDomain && ungrouped.length > 1) {
+      const domainGroups = groupTabs(ungrouped);
+      const colors = ['#667eea','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316'];
+      let colorIdx = 0;
+      domainGroups.forEach((domainTabs, domain) => {
+        const header = document.createElement('div');
+        header.className = 'group-header';
+        const dot = document.createElement('div');
+        dot.className = 'group-dot';
+        dot.style.background = colors[colorIdx++ % colors.length];
+        const label = document.createElement('span');
+        label.textContent = domain;
+        const count = document.createElement('span');
+        count.className = 'group-count';
+        count.textContent = domainTabs.length;
+        header.append(dot, label, count);
+        frag.appendChild(header);
+        domainTabs.forEach((tab) => frag.appendChild(createTabItem(tab)));
+      });
+    } else {
+      ungrouped.forEach((tab) => frag.appendChild(createTabItem(tab)));
+    }
+  }
+
+  tabList.innerHTML = '';
+  tabList.appendChild(frag);
+}
+
+function createNativeGroupHeader(group, tabCount) {
+  const header = document.createElement('div');
+  header.className = 'native-group-header';
+  header.dataset.groupId = group.id;
+
+  const colorDot = document.createElement('div');
+  colorDot.className = 'native-group-color';
+  colorDot.style.background = GROUP_COLORS[group.color] || '#9E9E9E';
+
+  const collapseBtn = document.createElement('button');
+  collapseBtn.className = 'native-group-collapse';
+  collapseBtn.title = group.collapsed ? '展开分组' : '折叠分组';
+  collapseBtn.innerHTML = group.collapsed ? chevronRightSvg() : chevronDownSvg();
+  collapseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleGroupCollapse(group);
+  });
+
+  const titleSpan = document.createElement('span');
+  titleSpan.className = 'native-group-title';
+  titleSpan.textContent = group.title || UNNAMED_GROUP_LABEL;
+
+  const countBadge = document.createElement('span');
+  countBadge.className = 'group-count';
+  countBadge.textContent = tabCount;
+
+  const actions = document.createElement('div');
+  actions.className = 'native-group-actions';
+
+  const editBtn = makeTabBtn(editSvg(), '编辑分组');
+  editBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    showGroupModal(group, null);
+  });
+
+  const ungroupBtn = makeTabBtn(ungroupSvg(), '取消分组');
+  ungroupBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    ungroupTabGroup(group);
+  });
+
+  actions.append(editBtn, ungroupBtn);
+  header.append(colorDot, collapseBtn, titleSpan, countBadge, actions);
+  return header;
 }
 
 function createTabItem(tab) {
@@ -437,14 +579,72 @@ async function closeSelectedTabs() {
 
 async function groupSelectedTabs() {
   const ids = [...state.selectedTabs];
-  if (ids.length < 2) { showToast('Select 2+ tabs to group', 'error'); return; }
+  if (ids.length < 2) { showToast('请选择2个或更多标签页', 'error'); return; }
+  showGroupModal(null, ids);
+}
+
+// ─── Native Tab Group Management ─────────────────────────────────────────────
+function showGroupModal(group, tabIds) {
+  state.groupModalTarget = { group, tabIds };
+  $('groupNameInput').value = group?.title || '';
+  state.selectedGroupColor = group?.color || 'blue';
+  document.querySelectorAll('.color-swatch').forEach((s) =>
+    s.classList.toggle('active', s.dataset.color === state.selectedGroupColor)
+  );
+  $('groupModalTitle').textContent = group ? '编辑分组' : '新建分组';
+  $('groupModal').classList.remove('hidden');
+  $('groupNameInput').focus();
+}
+
+function hideGroupModal() {
+  $('groupModal').classList.add('hidden');
+  state.groupModalTarget = null;
+}
+
+async function confirmGroupModal() {
+  const { group, tabIds } = state.groupModalTarget || {};
+  const title = $('groupNameInput').value.trim();
+  const color = state.selectedGroupColor;
   try {
-    await chrome.tabs.group({ tabIds: ids });
-    state.selectedTabs.clear();
+    if (group) {
+      // Edit existing group
+      await chrome.tabGroups.update(group.id, { title, color });
+      showToast('分组已更新', 'success');
+    } else if (tabIds && tabIds.length >= 2) {
+      // Create new group from selected tabs
+      const groupId = await chrome.tabs.group({ tabIds });
+      await chrome.tabGroups.update(groupId, { title, color });
+      state.selectedTabs.clear();
+      showToast('分组已创建', 'success');
+    }
+    hideGroupModal();
     await loadTabs();
-    showToast('Tabs grouped');
   } catch {
-    showToast('Grouping failed', 'error');
+    showToast('操作失败', 'error');
+  }
+}
+
+async function toggleGroupCollapse(group) {
+  try {
+    await chrome.tabGroups.update(group.id, { collapsed: !group.collapsed });
+    await loadTabs();
+  } catch {
+    showToast('操作失败', 'error');
+  }
+}
+
+async function ungroupTabGroup(group) {
+  try {
+    const groupTabIds = state.tabs
+      .filter((t) => t.groupId === group.id)
+      .map((t) => t.id);
+    if (groupTabIds.length > 0) {
+      await chrome.tabs.ungroup(groupTabIds);
+    }
+    await loadTabs();
+    showToast('已取消分组');
+  } catch {
+    showToast('操作失败', 'error');
   }
 }
 
@@ -1189,6 +1389,12 @@ function onBackgroundMessage(message) {
     case 'TAB_ACTIVATED':
       if (state.view === 'tabs') refreshActiveState(message.activeInfo);
       break;
+    case 'TAB_GROUP_CREATED':
+    case 'TAB_GROUP_UPDATED':
+    case 'TAB_GROUP_REMOVED':
+    case 'TAB_GROUP_MOVED':
+      if (state.view === 'tabs') loadTabs();
+      break;
     case 'BOOKMARK_ADDED':
       loadBookmarkCount();
       if (state.view === 'bookmarks') loadBookmarks();
@@ -1273,6 +1479,6 @@ const trashSvg  = () => svg('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 
 const chevronRightSvg = () => svg('<polyline points="9 18 15 12 9 6"/>');
 const chevronDownSvg  = () => svg('<polyline points="6 9 12 15 18 9"/>');
 const openAllSvg = () => svg('<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>');
-
+const ungroupSvg = () => svg('<rect x="2" y="3" width="8" height="7" rx="1"/><rect x="14" y="14" width="8" height="7" rx="1"/><line x1="10" y1="6.5" x2="12" y2="6.5"/><line x1="12" y1="6.5" x2="12" y2="17.5"/><line x1="12" y1="17.5" x2="14" y2="17.5"/>',  'stroke-linecap="round"');
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', init);
