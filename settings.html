@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TabPlusPlus – Settings</title>
+  <title data-i18n="settings_title">TabPlusPlus – Settings</title>
   <link rel="stylesheet" href="settings.css" />
 </head>
 <body>
@@ -15,7 +15,7 @@
           <div class="sp-logo-icon">T+</div>
           <span class="sp-logo-text">TabPlusPlus</span>
         </div>
-        <h1 class="sp-title">Settings</h1>
+        <h1 class="sp-title" data-i18n="settings_h1">Settings</h1>
       </div>
     </header>
 
@@ -23,51 +23,50 @@
     <main class="sp-main">
       <div class="sp-content">
 
-        <!-- General Section -->
         <section class="sp-section">
-          <h2 class="sp-section-title">General</h2>
+          <h2 class="sp-section-title" data-i18n="settings_general">General</h2>
           <label class="sp-item">
-            <span class="sp-item-label">Remember last view (Tabs / Bookmarks)</span>
+            <span class="sp-item-label" data-i18n="settings_remember_view">Remember last view (Tabs / Bookmarks)</span>
             <input type="checkbox" id="settingRememberView" class="sp-toggle" />
           </label>
           <label class="sp-item">
-            <span class="sp-item-label">Remember filter &amp; sort preferences</span>
+            <span class="sp-item-label" data-i18n="settings_remember_filters">Remember filter &amp; sort preferences</span>
             <input type="checkbox" id="settingRememberFilters" class="sp-toggle" />
           </label>
         </section>
 
         <!-- Bookmarks Section -->
         <section class="sp-section">
-          <h2 class="sp-section-title">Bookmarks</h2>
+          <h2 class="sp-section-title" data-i18n="settings_bookmarks">Bookmarks</h2>
           <div class="sp-item">
-            <span class="sp-item-label">Default view mode</span>
+            <span class="sp-item-label" data-i18n="settings_default_view">Default view mode</span>
             <div class="sp-radio-group">
               <label class="sp-radio-label">
                 <input type="radio" name="bookmarkViewMode" value="flat" id="bmViewFlat" />
-                <span>Folder</span>
+                <span data-i18n="settings_view_folder">Folder</span>
               </label>
               <label class="sp-radio-label">
                 <input type="radio" name="bookmarkViewMode" value="tree" id="bmViewTree" />
-                <span>Tree</span>
+                <span data-i18n="settings_view_tree">Tree</span>
               </label>
             </div>
           </div>
           <label class="sp-item">
-            <span class="sp-item-label">Show recent bookmarks section</span>
+            <span class="sp-item-label" data-i18n="settings_show_recent">Show recent bookmarks section</span>
             <input type="checkbox" id="settingShowRecent" class="sp-toggle" />
           </label>
           <div class="sp-item" id="recentCountRow">
-            <span class="sp-item-label">Recent bookmarks count</span>
+            <span class="sp-item-label" data-i18n="settings_recent_count">Recent bookmarks count</span>
             <input type="number" id="settingRecentCount" min="1" max="20" class="sp-number-input" />
           </div>
         </section>
 
         <!-- Keyboard Shortcuts Section -->
         <section class="sp-section">
-          <h2 class="sp-section-title">Keyboard Shortcuts</h2>
+          <h2 class="sp-section-title" data-i18n="settings_keyboard">Keyboard Shortcuts</h2>
           <label class="sp-item">
             <span class="sp-item-label">
-              Enable sidebar tab navigation shortcuts
+              <span data-i18n="settings_nav_shortcut">Enable sidebar tab navigation shortcuts</span>
               <span class="sp-item-hint">Navigate tabs in sidebar order using custom keyboard shortcuts (configure at <a href="#" id="shortcutSettingsLink">chrome://extensions/shortcuts</a>)</span>
             </span>
             <input type="checkbox" id="settingTabNavShortcut" class="sp-toggle" />
@@ -86,8 +85,8 @@
       <!-- Actions -->
       <div class="sp-actions">
         <div class="sp-actions-inner">
-          <button class="sp-btn sp-btn-secondary" id="btnReset">Reset to Defaults</button>
-          <button class="sp-btn sp-btn-primary" id="btnSave">Save Settings</button>
+          <button class="sp-btn sp-btn-secondary" id="btnReset" data-i18n="settings_reset_btn">Reset to Defaults</button>
+          <button class="sp-btn sp-btn-primary" id="btnSave" data-i18n="settings_save_btn">Save Settings</button>
         </div>
       </div>
     </main>

@@ -16,7 +16,7 @@
       <span class="logo-text">TabPlusPlus</span>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="btnSettings" title="Settings">
+      <button class="icon-btn" id="btnSettings" data-i18n-title="btn_settings_title" title="Settings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -33,14 +33,14 @@
         <rect x="3" y="10" width="18" height="4" rx="1"/>
         <rect x="3" y="17" width="18" height="4" rx="1"/>
       </svg>
-      <span>标签页</span>
+      <span data-i18n="nav_tabs">Tabs</span>
       <span class="nav-badge" id="tabCountBadge">0</span>
     </button>
     <button class="nav-tab" data-view="bookmarks" id="navBookmarks">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
       </svg>
-      <span>书签</span>
+      <span data-i18n="nav_bookmarks">Bookmarks</span>
       <span class="nav-badge" id="bookmarkCountBadge">0</span>
     </button>
   </nav>
@@ -53,36 +53,37 @@
         <circle cx="11" cy="11" r="8"/>
         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input type="text" id="tabSearch" placeholder="Search tabs…" class="search-input" />
-      <button class="search-clear" id="tabSearchClear" title="Clear">✕</button>
+      <input type="text" id="tabSearch" data-i18n-placeholder="search_tabs_placeholder" placeholder="Search tabs…" class="search-input" />
+      <button class="search-clear" id="tabSearchClear" data-i18n-title="search_clear_title" title="Clear">✕</button>
     </div>
 
     <!-- Filter pills -->
     <div class="filter-row">
-      <button class="filter-btn active" data-filter="all">All</button>
-      <button class="filter-btn" data-filter="current">Current Window</button>
-      <button class="filter-btn" data-filter="audible">Audible</button>
-      <button class="filter-btn" data-filter="pinned">Pinned</button>
-      <button class="filter-btn" data-filter="duplicates">Duplicates</button>
+      <button class="filter-btn active" data-filter="all" data-i18n="filter_all">All</button>
+      <button class="filter-btn" data-filter="current" data-i18n="filter_current">Current Window</button>
+      <button class="filter-btn" data-filter="audible" data-i18n="filter_audible">Audible</button>
+      <button class="filter-btn" data-filter="pinned" data-i18n="filter_pinned">Pinned</button>
+      <button class="filter-btn" data-filter="duplicates" data-i18n="filter_duplicates">Duplicates</button>
     </div>
 
     <!-- Sort and Group row -->
     <div class="controls-row">
       <div class="select-wrapper">
         <select id="tabSort" class="sort-select">
-          <option value="recent">By Recent</option>
-          <option value="title">By Title</option>
-          <option value="domain">By Domain</option>
+          <option value="recent" data-i18n="sort_recent">By Recent</option>
+          <option value="title" data-i18n="sort_title">By Title</option>
+          <option value="domain" data-i18n="sort_domain">By Domain</option>
+          <option value="custom" data-i18n="sort_custom" hidden>Custom</option>
         </select>
       </div>
-      <button class="toggle-btn" id="btnGroupBy" title="Group by domain">
+      <button class="toggle-btn" id="btnGroupBy" data-i18n-title="btn_group_by_title" title="Group by domain">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="7" rx="1"/>
           <rect x="14" y="3" width="7" height="7" rx="1"/>
           <rect x="3" y="14" width="7" height="7" rx="1"/>
           <rect x="14" y="14" width="7" height="7" rx="1"/>
         </svg>
-        Group
+        <span data-i18n="btn_group_by">Group</span>
       </button>
     </div>
 
@@ -98,34 +99,34 @@
 
     <!-- Bottom toolbar -->
     <div class="bottom-toolbar">
-      <button class="toolbar-btn" id="btnSelectAll" title="Select all">
+      <button class="toolbar-btn" id="btnSelectAll" data-i18n-title="btn_select_all" title="Select all">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="20 6 9 17 4 12"/>
         </svg>
-        Select All
+        <span data-i18n="btn_select_all">Select All</span>
       </button>
-      <button class="toolbar-btn danger" id="btnCloseSelected" title="Close selected tabs" disabled>
+      <button class="toolbar-btn danger" id="btnCloseSelected" data-i18n-title="btn_close_selected" title="Close selected tabs" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
-        Close
+        <span data-i18n="btn_close_selected">Close</span>
       </button>
-      <button class="toolbar-btn" id="btnGroupSelected" title="Group selected tabs" disabled>
+      <button class="toolbar-btn" id="btnGroupSelected" data-i18n-title="btn_group_selected" title="Group selected tabs" disabled>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <rect x="3" y="3" width="7" height="7" rx="1"/>
           <rect x="14" y="3" width="7" height="7" rx="1"/>
           <rect x="3" y="14" width="7" height="7" rx="1"/>
           <rect x="14" y="14" width="7" height="7" rx="1"/>
         </svg>
-        Group
+        <span data-i18n="btn_group_selected">Group</span>
       </button>
-      <button class="toolbar-btn accent" id="btnSaveSession" title="Save current session">
+      <button class="toolbar-btn accent" id="btnSaveSession" data-i18n-title="btn_save_session" title="Save current session">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
           <polyline points="17 21 17 13 7 13 7 21"/>
           <polyline points="7 3 7 8 15 8"/>
         </svg>
-        Save
+        <span data-i18n="btn_save_session">Save</span>
       </button>
     </div>
   </div>
@@ -138,14 +139,14 @@
         <circle cx="11" cy="11" r="8"/>
         <line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
-      <input type="text" id="bookmarkSearch" placeholder="Search bookmarks…" class="search-input" />
-      <button class="search-clear" id="bookmarkSearchClear" title="Clear">✕</button>
+      <input type="text" id="bookmarkSearch" data-i18n-placeholder="search_bookmarks_placeholder" placeholder="Search bookmarks…" class="search-input" />
+      <button class="search-clear" id="bookmarkSearchClear" data-i18n-title="search_clear_title" title="Clear">✕</button>
     </div>
 
     <!-- Toolbar row -->
     <div class="controls-row">
       <div class="breadcrumb" id="breadcrumb">
-        <span class="breadcrumb-item active" data-id="0">All Bookmarks</span>
+        <span class="breadcrumb-item active" data-id="0" data-i18n="all_bookmarks">All Bookmarks</span>
       </div>
       <button class="toggle-btn" id="btnBookmarkView" title="Switch view mode (Tree / Folder)">
         <svg id="bmViewIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -154,7 +155,7 @@
           <line x1="3" y1="18" x2="21" y2="18"/>
         </svg>
       </button>
-      <button class="icon-btn-primary" id="btnAddBookmark" title="Add bookmark">
+      <button class="icon-btn-primary" id="btnAddBookmark" data-i18n-title="btn_add_bookmark_title" title="Add bookmark">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
@@ -164,20 +165,20 @@
     <!-- Quick add bookmark form -->
     <div class="add-bookmark-form hidden" id="addBookmarkForm">
       <div class="form-group">
-        <label>Title</label>
-        <input type="text" id="bookmarkTitle" placeholder="Bookmark title" class="form-input" />
+        <label data-i18n="bookmark_form_title_label">Title</label>
+        <input type="text" id="bookmarkTitle" data-i18n-placeholder="bookmark_form_title_placeholder" placeholder="Bookmark title" class="form-input" />
       </div>
       <div class="form-group">
-        <label>URL</label>
-        <input type="url" id="bookmarkUrl" placeholder="https://…" class="form-input" />
+        <label data-i18n="bookmark_form_url_label">URL</label>
+        <input type="url" id="bookmarkUrl" data-i18n-placeholder="bookmark_form_url_placeholder" placeholder="https://…" class="form-input" />
       </div>
       <div class="form-group">
-        <label>Folder</label>
+        <label data-i18n="bookmark_form_folder_label">Folder</label>
         <select id="bookmarkFolder" class="form-input"></select>
       </div>
       <div class="form-actions">
-        <button class="btn-secondary" id="btnCancelBookmark">Cancel</button>
-        <button class="btn-primary" id="btnSaveBookmark">Save</button>
+        <button class="btn-secondary" id="btnCancelBookmark" data-i18n="btn_cancel_bookmark">Cancel</button>
+        <button class="btn-primary" id="btnSaveBookmark" data-i18n="btn_save_bookmark">Save</button>
       </div>
     </div>
 
@@ -193,10 +194,10 @@
 
   <!-- Context menu (shared) -->
   <div class="context-menu hidden" id="contextMenu">
-    <button class="context-menu-item" id="ctxOpen">Open</button>
-    <button class="context-menu-item" id="ctxOpenAll">Open All in Folder</button>
-    <button class="context-menu-item" id="ctxEdit">Edit</button>
-    <button class="context-menu-item danger" id="ctxDelete">Delete</button>
+    <button class="context-menu-item" id="ctxOpen" data-i18n="ctx_open">Open</button>
+    <button class="context-menu-item" id="ctxOpenAll" data-i18n="ctx_open_all">Open All in Folder</button>
+    <button class="context-menu-item" id="ctxEdit" data-i18n="ctx_edit">Edit</button>
+    <button class="context-menu-item danger" id="ctxDelete" data-i18n="ctx_delete">Delete</button>
   </div>
 
   <!-- Toast notification -->
@@ -206,20 +207,20 @@
   <div class="modal-overlay hidden" id="editModal">
     <div class="modal">
       <div class="modal-header">
-        <h3>Edit Bookmark</h3>
+        <h3 data-i18n="edit_modal_title">Edit Bookmark</h3>
         <button class="icon-btn" id="btnCloseModal">✕</button>
       </div>
       <div class="form-group">
-        <label>Title</label>
+        <label data-i18n="edit_title_label">Title</label>
         <input type="text" id="editTitle" class="form-input" />
       </div>
       <div class="form-group">
-        <label>URL</label>
+        <label data-i18n="edit_url_label">URL</label>
         <input type="url" id="editUrl" class="form-input" />
       </div>
       <div class="form-actions">
-        <button class="btn-secondary" id="btnCancelEdit">Cancel</button>
-        <button class="btn-primary" id="btnConfirmEdit">Save</button>
+        <button class="btn-secondary" id="btnCancelEdit" data-i18n="btn_cancel_edit">Cancel</button>
+        <button class="btn-primary" id="btnConfirmEdit" data-i18n="btn_confirm_edit">Save</button>
       </div>
     </div>
   </div>
@@ -228,30 +229,30 @@
   <div class="modal-overlay hidden" id="groupModal">
     <div class="modal">
       <div class="modal-header">
-        <h3 id="groupModalTitle">新建分组</h3>
+        <h3 id="groupModalTitle" data-i18n="group_modal_create">New Group</h3>
         <button class="icon-btn" id="btnCloseGroupModal">✕</button>
       </div>
       <div class="form-group">
-        <label>分组名称</label>
-        <input type="text" id="groupNameInput" placeholder="分组名称（可选）" class="form-input" maxlength="50" />
+        <label data-i18n="group_name_label">Group Name</label>
+        <input type="text" id="groupNameInput" data-i18n-placeholder="group_name_placeholder" placeholder="Group name (optional)" class="form-input" maxlength="50" />
       </div>
       <div class="form-group">
-        <label>颜色</label>
+        <label data-i18n="group_color_label">Color</label>
         <div class="color-swatches" id="colorSwatches">
-          <div class="color-swatch active" data-color="blue" style="background:#1A73E8" title="蓝色"></div>
-          <div class="color-swatch" data-color="red" style="background:#D93025" title="红色"></div>
-          <div class="color-swatch" data-color="yellow" style="background:#F29900" title="黄色"></div>
-          <div class="color-swatch" data-color="green" style="background:#188038" title="绿色"></div>
-          <div class="color-swatch" data-color="pink" style="background:#E52592" title="粉色"></div>
-          <div class="color-swatch" data-color="purple" style="background:#8430CE" title="紫色"></div>
-          <div class="color-swatch" data-color="cyan" style="background:#007B83" title="青色"></div>
-          <div class="color-swatch" data-color="orange" style="background:#FA903E" title="橙色"></div>
-          <div class="color-swatch" data-color="grey" style="background:#9E9E9E" title="灰色"></div>
+          <div class="color-swatch active" data-color="blue" style="background:#1A73E8" data-i18n-title="color_blue" title="Blue"></div>
+          <div class="color-swatch" data-color="red" style="background:#D93025" data-i18n-title="color_red" title="Red"></div>
+          <div class="color-swatch" data-color="yellow" style="background:#F29900" data-i18n-title="color_yellow" title="Yellow"></div>
+          <div class="color-swatch" data-color="green" style="background:#188038" data-i18n-title="color_green" title="Green"></div>
+          <div class="color-swatch" data-color="pink" style="background:#E52592" data-i18n-title="color_pink" title="Pink"></div>
+          <div class="color-swatch" data-color="purple" style="background:#8430CE" data-i18n-title="color_purple" title="Purple"></div>
+          <div class="color-swatch" data-color="cyan" style="background:#007B83" data-i18n-title="color_cyan" title="Cyan"></div>
+          <div class="color-swatch" data-color="orange" style="background:#FA903E" data-i18n-title="color_orange" title="Orange"></div>
+          <div class="color-swatch" data-color="grey" style="background:#9E9E9E" data-i18n-title="color_grey" title="Grey"></div>
         </div>
       </div>
       <div class="form-actions">
-        <button class="btn-secondary" id="btnCancelGroup">取消</button>
-        <button class="btn-primary" id="btnConfirmGroup">确认</button>
+        <button class="btn-secondary" id="btnCancelGroup" data-i18n="btn_cancel_group">Cancel</button>
+        <button class="btn-primary" id="btnConfirmGroup" data-i18n="btn_confirm_group">Confirm</button>
       </div>
     </div>
   </div>

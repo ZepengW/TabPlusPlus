@@ -2,6 +2,25 @@
 
 'use strict';
 
+// ─── i18n helper ─────────────────────────────────────────────────────────────
+function t(key, ...subs) {
+  let msg = chrome.i18n.getMessage(key);
+  if (!msg) return key;
+  return subs.reduce((s, v, i) => s.replaceAll('{' + (i + 1) + '}', String(v)), msg);
+}
+
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
+  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
+    el.title = t(el.dataset.i18nTitle);
+  });
+}
+
 // ─── Default Settings ────────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
   rememberLastView: true,
@@ -13,7 +32,6 @@ const DEFAULT_SETTINGS = {
 };
 
 const OPEN_ALL_CONFIRM_THRESHOLD = 10;
-const UNNAMED_GROUP_LABEL = '未命名分组';
 
 // ─── Tab Group Color Map ──────────────────────────────────────────────────────
 const GROUP_COLORS = {
@@ -39,12 +57,14 @@ const state = {
   selectedTabs: new Set(),
   currentWindowId: null,
 
+  customTabOrder: [],     // custom panel ordering (list of tab IDs)
+
   tabGroups: [],          // chrome.TabGroup[] – native Chrome tab groups
   selectedGroupColor: 'blue', // color selected in group modal
   groupModalTarget: null, // { group: TabGroup|null, tabIds: number[]|null }
 
   bookmarks: [],          // current folder nodes
-  bookmarkPath: [{ id: '0', title: 'All Bookmarks' }],
+  bookmarkPath: [{ id: '0', title: '' }],
   bookmarkSearchResults: null, // null = not searching
   bookmarkViewMode: 'flat',    // 'flat' | 'tree'
   bookmarkTreeExpanded: new Set(), // folder IDs expanded in tree view
@@ -73,6 +93,11 @@ const breadcrumb     = $('breadcrumb');
 
 // ─── Initialisation ──────────────────────────────────────────────────────────
 async function init() {
+  // Apply i18n strings first so UI is localised before any async load
+  applyI18n();
+  // Initialise bookmarkPath title after i18n is applied
+  state.bookmarkPath = [{ id: '0', title: t('all_bookmarks') }];
+
   const win = await chrome.windows.getCurrent();
   state.currentWindowId = win.id;
 
@@ -91,7 +116,14 @@ async function init() {
     btn.addEventListener('click', () => setTabFilter(btn.dataset.filter))
   );
   $('tabSort').addEventListener('change', (e) => {
-    state.tabSort = e.target.value;
+    const newSort = e.target.value;
+    if (newSort !== 'custom') {
+      // Hide the custom option again when switching away
+      const customOpt = e.target.querySelector('option[value="custom"]');
+      if (customOpt) customOpt.hidden = true;
+      state.customTabOrder = [];
+    }
+    state.tabSort = newSort;
     persistPreferences();
     renderTabView();
   });
@@ -191,6 +223,10 @@ async function loadTabs() {
   ]);
   state.tabs = tabs;
   state.tabGroups = tabGroups;
+  // Keep custom order in sync when tabs change externally
+  if (state.tabSort === 'custom' && state.customTabOrder.length > 0) {
+    syncCustomOrder();
+  }
   tabCountBadge.textContent = tabs.length;
   renderTabView();
   showTabSkeleton(false);
@@ -209,7 +245,7 @@ function renderTabView() {
 
   if (tabs.length === 0) {
     tabList.innerHTML = '';
-    tabList.appendChild(emptyState('No tabs match your search.'));
+    tabList.appendChild(emptyState(t('empty_tabs')));
     updateToolbarState();
     return;
   }
@@ -267,6 +303,17 @@ function sortTabs(tabs) {
     case 'domain':
       copy.sort((a, b) => getDomain(a.url).localeCompare(getDomain(b.url)));
       break;
+    case 'custom': {
+      const order = state.customTabOrder;
+      if (order.length > 0) {
+        copy.sort((a, b) => {
+          const ai = order.indexOf(a.id);
+          const bi = order.indexOf(b.id);
+          return (ai === -1 ? Infinity : ai) - (bi === -1 ? Infinity : bi);
+        });
+      }
+      break;
+    }
     default: // recent – keep browser order (index)
       copy.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
   }
@@ -373,13 +420,66 @@ function createNativeGroupHeader(group, tabCount) {
   header.className = 'native-group-header';
   header.dataset.groupId = group.id;
 
+  // Group headers are draggable to support custom reordering
+  header.draggable = true;
+  header.addEventListener('dragstart', (e) => {
+    e.stopPropagation();
+    dragSrcGroupId = group.id;
+    dragSrcId = null;
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  header.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    e.currentTarget.classList.add('drag-over');
+  });
+  header.addEventListener('dragleave', (e) => {
+    e.currentTarget.classList.remove('drag-over');
+  });
+  header.addEventListener('dragend', (e) => {
+    e.currentTarget.classList.remove('dragging', 'drag-over');
+    tabList.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+    dragSrcGroupId = null;
+  });
+  header.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.currentTarget.classList.remove('drag-over');
+    const targetGroupId = parseInt(e.currentTarget.dataset.groupId, 10);
+
+    if (dragSrcGroupId !== null && dragSrcGroupId !== targetGroupId) {
+      // Group dragged onto another group header → move src group before target group
+      const srcTabIds = getGroupTabIds(dragSrcGroupId);
+      const tgtTabIds = getGroupTabIds(targetGroupId);
+      const order = getOrBuildCustomOrder();
+      // Find the first tab of the target group in the order
+      const firstTgtId = order.find((id) => tgtTabIds.includes(id));
+      if (srcTabIds.length > 0 && firstTgtId !== undefined) {
+        state.customTabOrder = applyReorder(srcTabIds, firstTgtId, order);
+        switchToCustomSort();
+      }
+    } else if (dragSrcId !== null) {
+      // Single tab dragged onto a group header → place before first tab of that group
+      const tgtTabIds = getGroupTabIds(targetGroupId);
+      const order = getOrBuildCustomOrder();
+      const firstTgtId = order.find((id) => tgtTabIds.includes(id));
+      if (firstTgtId !== undefined && dragSrcId !== firstTgtId) {
+        state.customTabOrder = applyReorder([dragSrcId], firstTgtId, order);
+        switchToCustomSort();
+      }
+    }
+    dragSrcId = null;
+    dragSrcGroupId = null;
+  });
+
   const colorDot = document.createElement('div');
   colorDot.className = 'native-group-color';
   colorDot.style.background = GROUP_COLORS[group.color] || '#9E9E9E';
 
   const collapseBtn = document.createElement('button');
   collapseBtn.className = 'native-group-collapse';
-  collapseBtn.title = group.collapsed ? '展开分组' : '折叠分组';
+  collapseBtn.title = group.collapsed ? t('group_expand') : t('group_collapse');
   collapseBtn.innerHTML = group.collapsed ? chevronRightSvg() : chevronDownSvg();
   collapseBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -388,7 +488,7 @@ function createNativeGroupHeader(group, tabCount) {
 
   const titleSpan = document.createElement('span');
   titleSpan.className = 'native-group-title';
-  titleSpan.textContent = group.title || UNNAMED_GROUP_LABEL;
+  titleSpan.textContent = group.title || t('unnamed_group');
 
   const countBadge = document.createElement('span');
   countBadge.className = 'group-count';
@@ -397,25 +497,25 @@ function createNativeGroupHeader(group, tabCount) {
   const actions = document.createElement('div');
   actions.className = 'native-group-actions';
 
-  const editBtn = makeTabBtn(editSvg(), '编辑分组');
+  const editBtn = makeTabBtn(editSvg(), t('group_edit_btn'));
   editBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     showGroupModal(group, null);
   });
 
-  const selectAllGroupBtn = makeTabBtn(checkSquareSvg(), '全选分组标签页');
+  const selectAllGroupBtn = makeTabBtn(checkSquareSvg(), t('group_select_all'));
   selectAllGroupBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     selectAllInGroup(group);
   });
 
-  const closeGroupBtn = makeTabBtn(closeSvg(), '关闭分组所有标签页', 'close');
+  const closeGroupBtn = makeTabBtn(closeSvg(), t('group_close_all'), 'close');
   closeGroupBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     closeTabGroup(group);
   });
 
-  const ungroupBtn = makeTabBtn(ungroupSvg(), '取消分组');
+  const ungroupBtn = makeTabBtn(ungroupSvg(), t('group_ungroup'));
   ungroupBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     ungroupTabGroup(group);
@@ -459,7 +559,7 @@ function createTabItem(tab) {
   info.className = 'tab-info';
   const title = document.createElement('div');
   title.className = 'tab-title';
-  title.textContent = tab.title || 'New Tab';
+  title.textContent = tab.title || t('tab_new_title');
   const url = document.createElement('div');
   url.className = 'tab-url';
   url.textContent = getDomain(tab.url) || tab.url || '';
@@ -478,19 +578,19 @@ function createTabItem(tab) {
 
   const pinBtn = makeTabBtn(
     tab.pinned ? pinFilledSvg() : pinSvg(),
-    tab.pinned ? 'Unpin' : 'Pin',
+    tab.pinned ? t('tab_unpin') : t('tab_pin'),
     tab.pinned ? 'pinned-active' : ''
   );
   pinBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePin(tab); });
 
   const muteBtn = makeTabBtn(
     tab.mutedInfo?.muted ? unMuteSvg() : muteSvg(),
-    tab.mutedInfo?.muted ? 'Unmute' : 'Mute',
+    tab.mutedInfo?.muted ? t('tab_unmute') : t('tab_mute'),
     tab.mutedInfo?.muted ? 'muted-active' : ''
   );
   muteBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleMute(tab); });
 
-  const closeBtn = makeTabBtn(closeSvg(), 'Close tab', 'close');
+  const closeBtn = makeTabBtn(closeSvg(), t('tab_close'), 'close');
   closeBtn.addEventListener('click', (e) => { e.stopPropagation(); closeTab(tab.id); });
 
   actions.append(pinBtn, muteBtn, closeBtn);
@@ -545,9 +645,10 @@ async function closeTab(tabId) {
   await chrome.tabs.remove(tabId);
   state.tabs = state.tabs.filter((t) => t.id !== tabId);
   state.selectedTabs.delete(tabId);
+  if (state.tabSort === 'custom') syncCustomOrder();
   tabCountBadge.textContent = state.tabs.length;
   renderTabView();
-  showToast('Tab closed');
+  showToast(t('toast_tab_closed'));
 }
 
 async function togglePin(tab) {
@@ -584,14 +685,15 @@ async function closeSelectedTabs() {
   await chrome.tabs.remove(ids);
   state.tabs = state.tabs.filter((t) => !state.selectedTabs.has(t.id));
   state.selectedTabs.clear();
+  if (state.tabSort === 'custom') syncCustomOrder();
   tabCountBadge.textContent = state.tabs.length;
   renderTabView();
-  showToast(`Closed ${ids.length} tab${ids.length > 1 ? 's' : ''}`);
+  showToast(t('toast_tabs_closed', ids.length));
 }
 
 async function groupSelectedTabs() {
   const ids = [...state.selectedTabs];
-  if (ids.length === 0) { showToast('请先选择标签页', 'error'); return; }
+  if (ids.length === 0) { showToast(t('toast_select_tabs_first'), 'error'); return; }
   showGroupModal(null, ids);
 }
 
@@ -603,7 +705,7 @@ function showGroupModal(group, tabIds) {
   document.querySelectorAll('.color-swatch').forEach((s) =>
     s.classList.toggle('active', s.dataset.color === state.selectedGroupColor)
   );
-  $('groupModalTitle').textContent = group ? '编辑分组' : '新建分组';
+  $('groupModalTitle').textContent = group ? t('group_modal_edit') : t('group_modal_create');
   $('groupModal').classList.remove('hidden');
   $('groupNameInput').focus();
 }
@@ -621,18 +723,18 @@ async function confirmGroupModal() {
     if (group) {
       // Edit existing group
       await chrome.tabGroups.update(group.id, { title, color });
-      showToast('分组已更新', 'success');
+      showToast(t('toast_group_updated'), 'success');
     } else if (tabIds && tabIds.length >= 1) {
       // Create new group from selected tabs
       const groupId = await chrome.tabs.group({ tabIds });
       await chrome.tabGroups.update(groupId, { title, color });
       state.selectedTabs.clear();
-      showToast('分组已创建', 'success');
+      showToast(t('toast_group_created'), 'success');
     }
     hideGroupModal();
     await loadTabs();
   } catch {
-    showToast('操作失败', 'error');
+    showToast(t('toast_op_failed'), 'error');
   }
 }
 
@@ -641,7 +743,7 @@ async function toggleGroupCollapse(group) {
     await chrome.tabGroups.update(group.id, { collapsed: !group.collapsed });
     await loadTabs();
   } catch {
-    showToast('操作失败', 'error');
+    showToast(t('toast_op_failed'), 'error');
   }
 }
 
@@ -654,9 +756,9 @@ async function ungroupTabGroup(group) {
       await chrome.tabs.ungroup(groupTabIds);
     }
     await loadTabs();
-    showToast('已取消分组');
+    showToast(t('toast_ungrouped'));
   } catch {
-    showToast('操作失败', 'error');
+    showToast(t('toast_op_failed'), 'error');
   }
 }
 
@@ -682,9 +784,9 @@ async function closeTabGroup(group) {
     groupTabIds.forEach((id) => state.selectedTabs.delete(id));
     tabCountBadge.textContent = state.tabs.length;
     renderTabView();
-    showToast(`已关闭 ${groupTabIds.length} 个标签页`, 'success');
+    showToast(t('toast_group_closed', groupTabIds.length), 'success');
   } catch {
-    showToast('操作失败', 'error');
+    showToast(t('toast_op_failed'), 'error');
   }
 }
 
@@ -699,7 +801,7 @@ async function saveSession() {
   sessions.unshift(session);
   if (sessions.length > 10) sessions.length = 10;
   await chrome.storage.local.set({ sessions });
-  showToast(`Session saved (${tabs.length} tabs)`, 'success');
+  showToast(t('toast_session_saved', tabs.length), 'success');
 }
 
 function updateToolbarState() {
@@ -733,9 +835,11 @@ function toggleGroupBy() {
 
 // ─── Drag & Drop Reorder ─────────────────────────────────────────────────────
 let dragSrcId = null;
+let dragSrcGroupId = null;
 
 function onDragStart(e) {
   dragSrcId = parseInt(e.currentTarget.dataset.tabId, 10);
+  dragSrcGroupId = null;
   e.currentTarget.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
 }
@@ -753,17 +857,87 @@ function onDragLeave(e) {
 function onDragEnd(e) {
   e.currentTarget.classList.remove('dragging', 'drag-over');
   tabList.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+  dragSrcId = null;
+  dragSrcGroupId = null;
 }
 
-async function onDrop(e) {
+function onDrop(e) {
   e.preventDefault();
   e.currentTarget.classList.remove('drag-over');
   const targetId = parseInt(e.currentTarget.dataset.tabId, 10);
+  if (!targetId) return;
+
+  if (dragSrcGroupId !== null) {
+    // A group is being dragged – move all its tabs before this tab
+    const groupTabIds = getGroupTabIds(dragSrcGroupId);
+    if (groupTabIds.length > 0) {
+      state.customTabOrder = applyReorder(groupTabIds, targetId, getOrBuildCustomOrder());
+      switchToCustomSort();
+    }
+    return;
+  }
+
   if (!dragSrcId || dragSrcId === targetId) return;
-  const targetTab = state.tabs.find((t) => t.id === targetId);
-  if (!targetTab) return;
-  await chrome.tabs.move(dragSrcId, { index: targetTab.index });
-  await loadTabs();
+  state.customTabOrder = applyReorder([dragSrcId], targetId, getOrBuildCustomOrder());
+  switchToCustomSort();
+}
+
+// ─── Custom Sort Helpers ─────────────────────────────────────────────────────
+
+/** Build the current panel display order as a flat list of all tab IDs. */
+function getOrBuildCustomOrder() {
+  if (state.customTabOrder.length > 0) {
+    return [...state.customTabOrder];
+  }
+  // Seed from the current sorted display order, then append any undisplayed tabs
+  const displayed = sortTabs(filterTabs(state.tabs)).map((t) => t.id);
+  const displayedSet = new Set(displayed);
+  state.tabs.forEach((t) => { if (!displayedSet.has(t.id)) displayed.push(t.id); });
+  return displayed;
+}
+
+/** Remove deleted tabs from customTabOrder; append newly-added tabs at the end. */
+function syncCustomOrder() {
+  const allIds = new Set(state.tabs.map((t) => t.id));
+  const kept = state.customTabOrder.filter((id) => allIds.has(id));
+  const keptSet = new Set(kept);
+  state.tabs.forEach((t) => { if (!keptSet.has(t.id)) kept.push(t.id); });
+  state.customTabOrder = kept;
+}
+
+/** Move `idsToMove` to just before `beforeId` in `order`. Returns a new array. */
+function applyReorder(idsToMove, beforeId, order) {
+  const moveSet = new Set(idsToMove);
+  const rest = order.filter((id) => !moveSet.has(id));
+  const pos = rest.indexOf(beforeId);
+  if (pos !== -1) {
+    rest.splice(pos, 0, ...idsToMove);
+  } else {
+    rest.push(...idsToMove);
+  }
+  return rest;
+}
+
+/** Get tab IDs belonging to a native group, in their current index order. */
+function getGroupTabIds(groupId) {
+  return state.tabs
+    .filter((t) => t.groupId === groupId)
+    .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+    .map((t) => t.id);
+}
+
+/** Switch the sort mode to 'custom' and show the custom option in the dropdown. */
+function switchToCustomSort() {
+  state.tabSort = 'custom';
+  const sel = $('tabSort');
+  const customOpt = sel ? sel.querySelector('option[value="custom"]') : null;
+  if (customOpt) {
+    customOpt.hidden = false;
+    sel.value = 'custom';
+  }
+  persistPreferences();
+  renderTabView();
+  showToast(t('toast_custom_sort'));
 }
 
 // ─── Bookmark Management ─────────────────────────────────────────────────────
@@ -805,7 +979,7 @@ function renderBookmarks(nodes) {
   }
 
   if (nodes.length === 0) {
-    frag.appendChild(emptyState('This folder is empty.'));
+    frag.appendChild(emptyState(t('empty_folder')));
   } else {
     nodes.forEach((node) => frag.appendChild(createBookmarkItem(node)));
   }
@@ -839,7 +1013,7 @@ function createBookmarkItem(node) {
   info.className = 'bookmark-info';
   const titleEl = document.createElement('div');
   titleEl.className = 'bookmark-title';
-  titleEl.textContent = node.title || getDomain(node.url) || 'Untitled';
+  titleEl.textContent = node.title || getDomain(node.url) || t('tab_new_title');
   info.appendChild(titleEl);
   if (node.url) {
     const urlEl = document.createElement('div');
@@ -854,7 +1028,7 @@ function createBookmarkItem(node) {
   if (node.url) {
     const editBtn = document.createElement('button');
     editBtn.className = 'bm-btn';
-    editBtn.title = 'Edit';
+    editBtn.title = t('ctx_edit');
     editBtn.innerHTML = editSvg();
     editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(node); });
     actions.appendChild(editBtn);
@@ -862,7 +1036,7 @@ function createBookmarkItem(node) {
     // Folder: add "Open all" button
     const openAllBtn = document.createElement('button');
     openAllBtn.className = 'bm-btn';
-    openAllBtn.title = 'Open all bookmarks in folder';
+    openAllBtn.title = t('ctx_open_all');
     openAllBtn.innerHTML = openAllSvg();
     openAllBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
@@ -875,7 +1049,7 @@ function createBookmarkItem(node) {
 
   const delBtn = document.createElement('button');
   delBtn.className = 'bm-btn delete';
-  delBtn.title = 'Delete';
+  delBtn.title = t('ctx_delete');
   delBtn.innerHTML = trashSvg();
   delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteBookmark(node); });
   actions.appendChild(delBtn);
@@ -903,7 +1077,7 @@ function createBookmarkItem(node) {
 }
 
 function navigateInto(node) {
-  state.bookmarkPath.push({ id: node.id, title: node.title || 'Folder' });
+  state.bookmarkPath.push({ id: node.id, title: node.title || t('bookmark_form_folder_label') });
   loadBookmarks(node.id);
 }
 
@@ -979,20 +1153,22 @@ async function saveBookmark() {
   const title = $('bookmarkTitle').value.trim();
   const url   = $('bookmarkUrl').value.trim();
   const parentId = $('bookmarkFolder').value;
-  if (!url) { showToast('URL is required', 'error'); return; }
+  if (!url) { showToast(t('toast_url_required'), 'error'); return; }
   try {
     await chrome.bookmarks.create({ title: title || url, url, parentId });
     hideAddBookmarkForm();
     await loadBookmarks();
-    showToast('Bookmark saved', 'success');
+    showToast(t('toast_bookmark_saved'), 'success');
   } catch (e) {
-    showToast('Failed: ' + e.message, 'error');
+    showToast(t('toast_save_failed', e.message), 'error');
   }
 }
 
 async function deleteBookmark(node) {
-  const label = node.url ? 'bookmark' : 'folder';
-  if (!confirm(`Delete this ${label}: "${node.title}"?`)) return;
+  const confirmMsg = node.url
+    ? t('confirm_delete_bookmark', node.title)
+    : t('confirm_delete_folder', node.title);
+  if (!confirm(confirmMsg)) return;
   try {
     if (node.url) {
       await chrome.bookmarks.remove(node.id);
@@ -1000,9 +1176,9 @@ async function deleteBookmark(node) {
       await chrome.bookmarks.removeTree(node.id);
     }
     await loadBookmarks();
-    showToast('Deleted', 'success');
+    showToast(t('toast_deleted'), 'success');
   } catch (e) {
-    showToast('Delete failed: ' + e.message, 'error');
+    showToast(t('toast_delete_failed', e.message), 'error');
   }
 }
 
@@ -1028,9 +1204,9 @@ async function confirmEdit() {
     await chrome.bookmarks.update(target.node.id, { title, url: url || undefined });
     closeEditModal();
     await loadBookmarks();
-    showToast('Bookmark updated', 'success');
+    showToast(t('toast_bookmark_updated'), 'success');
   } catch (e) {
-    showToast('Update failed: ' + e.message, 'error');
+    showToast(t('toast_save_failed', e.message), 'error');
   }
 }
 
@@ -1060,10 +1236,10 @@ async function loadBookmarksTree() {
     state.bookmarkFullTree = fullTree;
     renderBookmarksTree(fullTree[0].children || []);
     // Hide breadcrumb in tree mode
-    breadcrumb.innerHTML = '<span class="breadcrumb-item active">All Bookmarks (Tree)</span>';
+    breadcrumb.innerHTML = `<span class="breadcrumb-item active">${t('all_bookmarks_tree')}</span>`;
     await loadBookmarkCount();
   } catch (e) {
-    showToast('Failed to load bookmarks', 'error');
+    showToast(t('toast_save_failed', e.message), 'error');
   }
   showBkSkeleton(false);
 }
@@ -1138,7 +1314,7 @@ function createTreeItem(node, level) {
   info.className = 'bookmark-info';
   const titleEl = document.createElement('div');
   titleEl.className = 'bookmark-title';
-  titleEl.textContent = node.title || getDomain(node.url) || 'Untitled';
+  titleEl.textContent = node.title || getDomain(node.url) || t('tab_new_title');
   info.appendChild(titleEl);
 
   const actions = document.createElement('div');
@@ -1147,14 +1323,14 @@ function createTreeItem(node, level) {
   if (node.url) {
     const editBtn = document.createElement('button');
     editBtn.className = 'bm-btn';
-    editBtn.title = 'Edit';
+    editBtn.title = t('ctx_edit');
     editBtn.innerHTML = editSvg();
     editBtn.addEventListener('click', (e) => { e.stopPropagation(); openEditModal(node); });
     actions.appendChild(editBtn);
   } else if (node.children && node.children.length > 0) {
     const openAllBtn = document.createElement('button');
     openAllBtn.className = 'bm-btn';
-    openAllBtn.title = 'Open all in folder';
+    openAllBtn.title = t('ctx_open_all');
     openAllBtn.innerHTML = openAllSvg();
     openAllBtn.addEventListener('click', (e) => { e.stopPropagation(); openAllInFolder(node); });
     actions.appendChild(openAllBtn);
@@ -1162,7 +1338,7 @@ function createTreeItem(node, level) {
 
   const delBtn = document.createElement('button');
   delBtn.className = 'bm-btn delete';
-  delBtn.title = 'Delete';
+  delBtn.title = t('ctx_delete');
   delBtn.innerHTML = trashSvg();
   delBtn.addEventListener('click', (e) => { e.stopPropagation(); deleteBookmark(node); });
   actions.appendChild(delBtn);
@@ -1215,7 +1391,7 @@ function toggleBookmarkViewMode() {
   updateBookmarkViewButton();
   // Reset path when switching to tree mode
   if (state.bookmarkViewMode === 'tree') {
-    state.bookmarkPath = [{ id: '0', title: 'All Bookmarks' }];
+    state.bookmarkPath = [{ id: '0', title: t('all_bookmarks') }];
   }
   loadBookmarks();
 }
@@ -1224,11 +1400,11 @@ function updateBookmarkViewButton() {
   const btn = $('btnBookmarkView');
   if (state.bookmarkViewMode === 'tree') {
     btn.classList.add('active');
-    btn.title = 'Switch to Folder view';
+    btn.title = t('btn_bookmark_view_tree') || 'Switch to Folder view';
     $('bmViewIcon').innerHTML = `<path d="M3 3h4v4H3zM3 10h4v4H3zM3 17h4v4H3z"/><line x1="10" y1="5" x2="21" y2="5"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="19" x2="21" y2="19"/>`;
   } else {
     btn.classList.remove('active');
-    btn.title = 'Switch to Tree view';
+    btn.title = t('btn_bookmark_view_flat') || 'Switch to Tree view';
     $('bmViewIcon').innerHTML = `<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>`;
   }
 }
@@ -1239,12 +1415,12 @@ async function openAllInFolder(node) {
   const urls = [];
   const collect = (nodes) => nodes.forEach((n) => { if (n.url) urls.push(n.url); if (n.children) collect(n.children); });
   collect(node.children);
-  if (urls.length === 0) { showToast('No bookmarks in this folder', 'error'); return; }
+  if (urls.length === 0) { showToast(t('empty_no_bookmarks'), 'error'); return; }
   if (urls.length > OPEN_ALL_CONFIRM_THRESHOLD) {
-    if (!confirm(`Open ${urls.length} tabs?`)) return;
+    if (!confirm(t('confirm_open_tabs', urls.length))) return;
   }
   urls.forEach((url) => chrome.tabs.create({ url, active: false }));
-  showToast(`Opened ${urls.length} tab${urls.length > 1 ? 's' : ''}`, 'success');
+  showToast(t('toast_opened_tabs', urls.length), 'success');
 }
 
 // ─── Recent Bookmarks ────────────────────────────────────────────────────────
@@ -1264,7 +1440,7 @@ function createRecentBookmarksSection() {
 
   const header = document.createElement('div');
   header.className = 'recent-header';
-  header.innerHTML = `<span class="recent-label">⏱ Recent</span>`;
+  header.innerHTML = `<span class="recent-label">${t('recent_label')}</span>`;
   section.appendChild(header);
 
   state.recentBookmarks.forEach((bm) => {
@@ -1301,7 +1477,7 @@ function createRecentBookmarksSection() {
 async function loadSettings() {
   const stored = await chrome.storage.local.get([
     'settings', 'lastView', 'lastTabFilter', 'lastTabSort',
-    'lastGroupByDomain', 'recentBookmarks',
+    'lastGroupByDomain', 'recentBookmarks', 'lastCustomTabOrder',
   ]);
   state.settings = { ...DEFAULT_SETTINGS, ...(stored.settings || {}) };
   state.recentBookmarks = stored.recentBookmarks || [];
@@ -1313,6 +1489,7 @@ async function loadSettings() {
     if (stored.lastTabFilter) state.tabFilter = stored.lastTabFilter;
     if (stored.lastTabSort) state.tabSort = stored.lastTabSort;
     if (stored.lastGroupByDomain !== undefined) state.groupByDomain = !!stored.lastGroupByDomain;
+    if (stored.lastCustomTabOrder) state.customTabOrder = stored.lastCustomTabOrder;
   }
   state.bookmarkViewMode = state.settings.bookmarkViewMode || 'flat';
 }
@@ -1324,7 +1501,14 @@ function applyPreferencesToUI() {
   );
   // Apply saved sort
   const sortSel = $('tabSort');
-  if (sortSel) sortSel.value = state.tabSort;
+  if (sortSel) {
+    if (state.tabSort === 'custom') {
+      // Show the custom option before setting the value
+      const customOpt = sortSel.querySelector('option[value="custom"]');
+      if (customOpt) customOpt.hidden = false;
+    }
+    sortSel.value = state.tabSort;
+  }
   // Apply group by domain
   $('btnGroupBy').classList.toggle('active', state.groupByDomain);
   // Apply bookmark view mode icon
@@ -1345,6 +1529,7 @@ async function persistPreferences() {
     data.lastTabFilter = state.tabFilter;
     data.lastTabSort = state.tabSort;
     data.lastGroupByDomain = state.groupByDomain;
+    data.lastCustomTabOrder = state.customTabOrder;
   }
   await chrome.storage.local.set(data);
 }
@@ -1441,10 +1626,10 @@ function onBackgroundMessage(message) {
       break;
     case 'DUPLICATES_CLOSED':
       if (state.view === 'tabs') loadTabs();
-      showToast(`Closed ${message.count} duplicate${message.count !== 1 ? 's' : ''}`, 'success');
+      showToast(t('toast_dup_closed', message.count, message.count !== 1 ? 's' : ''), 'success');
       break;
     case 'SESSION_SAVED':
-      showToast(`Session saved (${message.count} tab${message.count !== 1 ? 's' : ''})`, 'success');
+      showToast(t('toast_session_saved', message.count), 'success');
       break;
   }
 }

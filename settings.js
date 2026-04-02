@@ -2,6 +2,20 @@
 
 'use strict';
 
+// ─── i18n helper ─────────────────────────────────────────────────────────────
+function t(key, ...subs) {
+  let msg = chrome.i18n.getMessage(key);
+  if (!msg) return key;
+  return subs.reduce((s, v, i) => s.replaceAll('{' + (i + 1) + '}', String(v)), msg);
+}
+
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+  document.title = t('settings_title') || document.title;
+}
+
 const DEFAULT_SETTINGS = {
   rememberLastView: true,
   rememberFilters: true,
@@ -15,6 +29,7 @@ const $ = (id) => document.getElementById(id);
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 async function init() {
+  applyI18n();
   await loadSettings();
   attachListeners();
 }
@@ -43,7 +58,7 @@ function applyToUI(s) {
 async function saveSettings() {
   const settings = readFromUI();
   await chrome.storage.local.set({ settings });
-  showToast('Settings saved', 'success');
+  showToast(t('settings_saved'), 'success');
 }
 
 function readFromUI() {
@@ -59,10 +74,10 @@ function readFromUI() {
 
 // ─── Reset ───────────────────────────────────────────────────────────────────
 async function resetSettings() {
-  if (!confirm('Reset all settings to defaults?')) return;
+  if (!confirm(t('settings_reset_confirm'))) return;
   await chrome.storage.local.set({ settings: { ...DEFAULT_SETTINGS } });
   applyToUI({ ...DEFAULT_SETTINGS });
-  showToast('Settings reset to defaults', 'success');
+  showToast(t('settings_reset_done'), 'success');
 }
 
 // ─── Listeners ───────────────────────────────────────────────────────────────
