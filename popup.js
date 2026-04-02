@@ -84,7 +84,12 @@ async function closeDuplicates() {
   }
 
   await chrome.tabs.remove(toClose);
-  showToast(t('popup_dupes_closed', toClose.length, toClose.length !== 1 ? 's' : ''), 'success');
+  showToast(
+    toClose.length === 1
+      ? t('popup_dupes_closed_one', toClose.length)
+      : t('popup_dupes_closed', toClose.length),
+    'success'
+  );
   await loadStats();
 }
 

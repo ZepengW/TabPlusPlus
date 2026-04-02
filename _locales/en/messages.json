@@ -108,7 +108,8 @@
   "toast_save_failed":       { "message": "Failed: {1}" },
   "toast_custom_sort":       { "message": "Custom sort \u2013 drag to reorder" },
   "toast_opened_tabs":       { "message": "Opened {1} tabs" },
-  "toast_dup_closed":        { "message": "Closed {1} duplicate{2}" },
+  "toast_dup_closed":     { "message": "Closed {1} duplicates" },
+  "toast_dup_closed_one": { "message": "Closed {1} duplicate" },
 
   "confirm_delete_bookmark": { "message": "Delete this bookmark: \"{1}\"?" },
   "confirm_delete_folder":   { "message": "Delete this folder: \"{1}\"?" },
@@ -145,7 +146,8 @@
   "popup_no_sessions":    { "message": "No saved sessions yet." },
   "popup_restore":        { "message": "Restore" },
   "popup_no_dupes":       { "message": "No duplicate tabs found" },
-  "popup_dupes_closed":   { "message": "Closed {1} duplicate{2}" },
+  "popup_dupes_closed":     { "message": "Closed {1} duplicates" },
+  "popup_dupes_closed_one": { "message": "Closed {1} duplicate" },
   "popup_session_saved":  { "message": "Session saved ({1} tabs)" },
   "popup_restored":       { "message": "Restored {1} tabs" },
 

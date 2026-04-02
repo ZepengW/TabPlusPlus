@@ -1239,7 +1239,7 @@ async function loadBookmarksTree() {
     breadcrumb.innerHTML = `<span class="breadcrumb-item active">${t('all_bookmarks_tree')}</span>`;
     await loadBookmarkCount();
   } catch (e) {
-    showToast(t('toast_save_failed', e.message), 'error');
+    showToast(t('toast_op_failed'), 'error');
   }
   showBkSkeleton(false);
 }
@@ -1400,11 +1400,11 @@ function updateBookmarkViewButton() {
   const btn = $('btnBookmarkView');
   if (state.bookmarkViewMode === 'tree') {
     btn.classList.add('active');
-    btn.title = t('btn_bookmark_view_tree') || 'Switch to Folder view';
+    btn.title = t('btn_bookmark_view_tree');
     $('bmViewIcon').innerHTML = `<path d="M3 3h4v4H3zM3 10h4v4H3zM3 17h4v4H3z"/><line x1="10" y1="5" x2="21" y2="5"/><line x1="10" y1="12" x2="21" y2="12"/><line x1="10" y1="19" x2="21" y2="19"/>`;
   } else {
     btn.classList.remove('active');
-    btn.title = t('btn_bookmark_view_flat') || 'Switch to Tree view';
+    btn.title = t('btn_bookmark_view_flat');
     $('bmViewIcon').innerHTML = `<line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>`;
   }
 }
@@ -1626,7 +1626,12 @@ function onBackgroundMessage(message) {
       break;
     case 'DUPLICATES_CLOSED':
       if (state.view === 'tabs') loadTabs();
-      showToast(t('toast_dup_closed', message.count, message.count !== 1 ? 's' : ''), 'success');
+      showToast(
+        message.count === 1
+          ? t('toast_dup_closed_one', message.count)
+          : t('toast_dup_closed', message.count),
+        'success'
+      );
       break;
     case 'SESSION_SAVED':
       showToast(t('toast_session_saved', message.count), 'success');
