@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "TabPlusPlus",
-  "version": "1.2.0",
+  "version": "1.0.0",
   "description": "智能一体化的Tab管理插件 - Smart all-in-one tab management extension",
   "permissions": [
     "tabs",
