@@ -421,6 +421,7 @@ body {
   padding: 7px 8px; border-radius: var(--radius-md);
   cursor: pointer; transition: background var(--transition);
   border: 1.5px solid transparent;
+  flex-shrink: 0;
 }
 
 .bookmark-item:hover { background: var(--bg-hover); border-color: var(--border); }
@@ -626,7 +627,7 @@ body {
 .hidden { display: none !important; }
 
 /* --- Bookmark Tree View --------------------------- */
-.tree-children { overflow: hidden; }
+.tree-children { overflow: hidden; flex-shrink: 0; }
 .tree-children.collapsed { display: none; }
 
 .tree-expand-btn {

@@ -403,13 +403,25 @@ function createNativeGroupHeader(group, tabCount) {
     showGroupModal(group, null);
   });
 
+  const selectAllGroupBtn = makeTabBtn(checkSquareSvg(), '全选分组标签页');
+  selectAllGroupBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectAllInGroup(group);
+  });
+
+  const closeGroupBtn = makeTabBtn(closeSvg(), '关闭分组所有标签页', 'close');
+  closeGroupBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeTabGroup(group);
+  });
+
   const ungroupBtn = makeTabBtn(ungroupSvg(), '取消分组');
   ungroupBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     ungroupTabGroup(group);
   });
 
-  actions.append(editBtn, ungroupBtn);
+  actions.append(selectAllGroupBtn, closeGroupBtn, editBtn, ungroupBtn);
   header.append(colorDot, collapseBtn, titleSpan, countBadge, actions);
   return header;
 }
@@ -579,7 +591,7 @@ async function closeSelectedTabs() {
 
 async function groupSelectedTabs() {
   const ids = [...state.selectedTabs];
-  if (ids.length < 2) { showToast('请选择2个或更多标签页', 'error'); return; }
+  if (ids.length === 0) { showToast('请先选择标签页', 'error'); return; }
   showGroupModal(null, ids);
 }
 
@@ -610,7 +622,7 @@ async function confirmGroupModal() {
       // Edit existing group
       await chrome.tabGroups.update(group.id, { title, color });
       showToast('分组已更新', 'success');
-    } else if (tabIds && tabIds.length >= 2) {
+    } else if (tabIds && tabIds.length >= 1) {
       // Create new group from selected tabs
       const groupId = await chrome.tabs.group({ tabIds });
       await chrome.tabGroups.update(groupId, { title, color });
@@ -643,6 +655,34 @@ async function ungroupTabGroup(group) {
     }
     await loadTabs();
     showToast('已取消分组');
+  } catch {
+    showToast('操作失败', 'error');
+  }
+}
+
+function selectAllInGroup(group) {
+  const groupTabs = state.tabs.filter((t) => t.groupId === group.id);
+  const allSelected = groupTabs.every((t) => state.selectedTabs.has(t.id));
+  if (allSelected) {
+    groupTabs.forEach((t) => state.selectedTabs.delete(t.id));
+  } else {
+    groupTabs.forEach((t) => state.selectedTabs.add(t.id));
+  }
+  renderTabView();
+}
+
+async function closeTabGroup(group) {
+  const groupTabIds = state.tabs
+    .filter((t) => t.groupId === group.id)
+    .map((t) => t.id);
+  if (groupTabIds.length === 0) return;
+  try {
+    await chrome.tabs.remove(groupTabIds);
+    state.tabs = state.tabs.filter((t) => t.groupId !== group.id);
+    groupTabIds.forEach((id) => state.selectedTabs.delete(id));
+    tabCountBadge.textContent = state.tabs.length;
+    renderTabView();
+    showToast(`已关闭 ${groupTabIds.length} 个标签页`, 'success');
   } catch {
     showToast('操作失败', 'error');
   }
@@ -1470,6 +1510,7 @@ const svg = (d, extra = '') =>
   `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ${extra}>${d}</svg>`;
 
 const closeSvg  = () => svg('<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>');
+const checkSquareSvg = () => svg('<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 12l2 2 4-4"/>');
 const pinSvg    = () => svg('<line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/>');
 const pinFilledSvg = () => svg('<line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17z"/>', 'fill="currentColor"');
 const muteSvg   = () => svg('<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>');
