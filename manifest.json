@@ -5,6 +5,7 @@
   "description": "智能一体化的Tab管理插件 - Smart all-in-one tab management extension",
   "permissions": [
     "tabs",
+    "tabGroups",
     "bookmarks",
     "storage",
     "sessions",
