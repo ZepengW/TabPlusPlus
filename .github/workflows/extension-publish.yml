@@ -8,6 +8,16 @@ on:
     branches: [main]
   workflow_dispatch:
     inputs:
+      publish_latest_release_only:
+        description: 'Only publish the current latest GitHub Release asset to Chrome Web Store'
+        required: false
+        default: false
+        type: boolean
+      latest_release_asset_name:
+        description: 'Asset file name in the latest GitHub Release'
+        required: false
+        default: 'tabplusplus_1.0.0.zip'
+        type: string
       force_publish:
         description: 'Force publish even if manifest version did not change'
         required: false
@@ -23,13 +33,20 @@ on:
         required: false
         default: true
         type: boolean
+      use_ai_changelog:
+        description: 'Use AI to summarize git log into release changelog'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
+  models: read
 
 jobs:
   detect-version:
     name: Detect version change
+    if: github.event_name != 'workflow_dispatch' || !inputs.publish_latest_release_only
     runs-on: ubuntu-latest
     outputs:
       version_changed: ${{ steps.check.outputs.version_changed }}
@@ -112,6 +129,8 @@ jobs:
     needs: detect-version
     if: needs.detect-version.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
+    outputs:
+      zip_name: ${{ steps.zip_meta.outputs.zip_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -158,11 +177,24 @@ jobs:
             exit 1
           fi
 
+      - name: Set zip metadata
+        id: zip_meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ needs.detect-version.outputs.new_version }}"
+          ZIP_NAME="tabplusplus_${VERSION}.zip"
+
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+          echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
+
       - name: Debug package directory
         shell: bash
         run: |
           set -euo pipefail
           echo "package_dir=${{ steps.package_dir.outputs.dir }}"
+          echo "zip_name=$ZIP_NAME"
           echo "workspace=$GITHUB_WORKSPACE"
           pwd
           ls -la
@@ -177,7 +209,7 @@ jobs:
           set -euo pipefail
 
           DIR="${{ steps.package_dir.outputs.dir }}"
-          OUT="$GITHUB_WORKSPACE/extension.zip"
+          OUT="$GITHUB_WORKSPACE/$ZIP_NAME"
 
           rm -f "$OUT"
 
@@ -196,7 +228,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: extension
-          path: ${{ github.workspace }}/extension.zip
+          path: ${{ github.workspace }}/${{ env.ZIP_NAME }}
           if-no-files-found: error
 
   publish-chrome-web-store:
@@ -215,7 +247,7 @@ jobs:
         uses: browser-actions/release-chrome-extension@v0.2.1
         with:
           extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
-          extension-path: extension.zip
+          extension-path: tabplusplus_${{ needs.detect-version.outputs.new_version }}.zip
           oauth-client-id: ${{ secrets.CHROME_CLIENT_ID }}
           oauth-client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           oauth-refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
@@ -258,7 +290,137 @@ jobs:
             git push origin "$TAG"
           fi
 
-      - name: Create GitHub Release
+      - name: Prepare git log for changelog
+        id: changelog_input
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="v${{ needs.detect-version.outputs.new_version }}"
+          PREV_TAG="$(git tag --sort=-version:refname | grep '^v' | grep -Fxv "$TAG" | head -n1 || true)"
+
+          echo "current_tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "previous_tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$PREV_TAG" ]; then
+            RANGE="${PREV_TAG}..HEAD"
+            echo "Using range: $RANGE"
+            git log "$RANGE" --no-merges --date=short \
+              --pretty=format:'- %s (%h, %ad)' > gitlog.txt
+          else
+            echo "No previous tag found, using recent history."
+            git log --no-merges --date=short \
+              --pretty=format:'- %s (%h, %ad)' -n 30 > gitlog.txt
+          fi
+
+          if [ ! -s gitlog.txt ]; then
+            echo "- No user-facing commits found." > gitlog.txt
+          fi
+
+          echo "Git log for release notes:"
+          cat gitlog.txt
+
+      - name: Generate AI changelog
+        id: ai_notes
+        if: github.event_name != 'workflow_dispatch' || inputs.use_ai_changelog
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 <<'PY'
+          import json
+          from pathlib import Path
+
+          gitlog = Path("gitlog.txt").read_text(encoding="utf-8")
+          previous_tag = "${{ steps.changelog_input.outputs.previous_tag }}"
+          current_tag = "${{ steps.changelog_input.outputs.current_tag }}"
+
+          user_prompt = f"""You are writing GitHub release notes for a browser extension.
+
+          Current version tag: {current_tag}
+          Previous version tag: {previous_tag if previous_tag else "none"}
+
+          Based only on the git log below, write concise release notes in markdown.
+
+          Requirements:
+          - Do not copy the git log verbatim.
+          - Summarize and group related changes.
+          - Focus on user-visible changes, fixes, packaging, release, and developer-impacting updates.
+          - Avoid making up features not supported by the log.
+          - Prefer 3 sections at most.
+          - Keep it concise.
+          - Start with a short 1-2 sentence summary.
+          - If the log is too sparse, produce a short conservative summary.
+
+          Git log:
+          {gitlog}
+          """
+
+          payload = {
+              "model": "openai/gpt-4o-mini",
+              "temperature": 0.2,
+              "messages": [
+                  {
+                      "role": "system",
+                      "content": "You write accurate, concise GitHub release notes in markdown."
+                  },
+                  {
+                      "role": "user",
+                      "content": user_prompt
+                  }
+              ]
+          }
+
+          Path("models_payload.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+          PY
+
+          curl -sS https://models.github.ai/inference/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data @models_payload.json > models_response.json
+
+          python3 <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          data = json.loads(Path("models_response.json").read_text(encoding="utf-8"))
+
+          if "choices" not in data or not data["choices"]:
+              print("Invalid GitHub Models response:", data)
+              sys.exit(1)
+
+          content = data["choices"][0]["message"]["content"].strip()
+          Path("release_notes.md").write_text(content + "\n", encoding="utf-8")
+          print(content)
+          PY
+
+      - name: Fallback changelog
+        if: always() && (steps.ai_notes.outcome != 'success')
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="${{ steps.changelog_input.outputs.current_tag }}"
+          PREV="${{ steps.changelog_input.outputs.previous_tag }}"
+
+          {
+            echo "Release ${TAG}"
+            echo
+            if [ -n "$PREV" ]; then
+              echo "Changes since ${PREV}:"
+            else
+              echo "Recent changes:"
+            fi
+            echo
+            cat gitlog.txt
+          } > release_notes.md
+
+      - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -266,17 +428,93 @@ jobs:
           set -euo pipefail
 
           TAG="v${{ needs.detect-version.outputs.new_version }}"
+          FILE="tabplusplus_${{ needs.detect-version.outputs.new_version }}.zip"
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists, uploading asset if needed."
-            gh release upload "$TAG" extension.zip --clobber
+          if gh release view "$TAG" -R "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, updating notes and asset."
+            gh release edit "$TAG" \
+              -R "${{ github.repository }}" \
+              --notes-file release_notes.md
+            gh release upload "$TAG" "$FILE" \
+              -R "${{ github.repository }}" \
+              --clobber
           else
-            gh release create "$TAG" extension.zip \
+            gh release create "$TAG" "$FILE" \
+              -R "${{ github.repository }}" \
               --title "$TAG" \
-              --generate-notes
+              --notes-file release_notes.md
           fi
 
       - name: Release summary
         shell: bash
         run: |
           echo "Created GitHub Release for version: ${{ needs.detect-version.outputs.new_version }}"
+          echo "Asset: tabplusplus_${{ needs.detect-version.outputs.new_version }}.zip"
+
+  publish-latest-release-only:
+    name: Publish Latest GitHub Release Only
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_latest_release_only
+    runs-on: ubuntu-latest
+    environment: publish
+    steps:
+      - name: Show latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh release view \
+            -R "${{ github.repository }}" \
+            --json tagName,name,isDraft,isPrerelease,publishedAt,assets \
+            --jq '{
+              tagName,
+              name,
+              isDraft,
+              isPrerelease,
+              publishedAt,
+              assets: [.assets[].name]
+            }'
+
+      - name: Download latest release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ASSET_NAME="${{ inputs.latest_release_asset_name }}"
+          mkdir -p release_asset
+
+          gh release download \
+            -R "${{ github.repository }}" \
+            --pattern "$ASSET_NAME" \
+            --dir release_asset
+
+          test -f "release_asset/$ASSET_NAME"
+          ls -lh "release_asset/$ASSET_NAME"
+
+      - name: Publish to Chrome Web Store
+        uses: browser-actions/release-chrome-extension@v0.2.1
+        with:
+          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+          extension-path: release_asset/${{ inputs.latest_release_asset_name }}
+          oauth-client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          oauth-client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          oauth-refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+
+      - name: Publish summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG=$(
+            gh release view \
+              -R "${{ github.repository }}" \
+              --json tagName \
+              --jq '.tagName'
+          )
+
+          echo "Published latest GitHub release: $TAG"
