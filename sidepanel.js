@@ -504,7 +504,23 @@ function createDomainGroupHeader(domain, tabCount, color) {
     dragSrcId = null;
   });
 
-  header.append(dot, collapseBtn, label, count);
+  const actions = document.createElement('div');
+  actions.className = 'group-actions';
+
+  const selectAllDomainBtn = makeTabBtn(checkSquareSvg(), t('group_select_all'));
+  selectAllDomainBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectAllInDomainGroup(domain);
+  });
+
+  const closeDomainBtn = makeTabBtn(closeSvg(), t('group_close_all'), 'close');
+  closeDomainBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDomainGroup(domain);
+  });
+
+  actions.append(selectAllDomainBtn, closeDomainBtn);
+  header.append(dot, collapseBtn, label, count, actions);
   return header;
 }
 
@@ -905,6 +921,36 @@ async function closeTabGroup(group) {
     tabCountBadge.textContent = state.tabs.length;
     renderTabView();
     showToast(t('toast_group_closed', groupTabIds.length), 'success');
+  } catch {
+    showToast(t('toast_op_failed'), 'error');
+  }
+}
+
+function selectAllInDomainGroup(domain) {
+  const domainTabs = state.filteredTabs.filter((t) => getDomain(t.url) === domain);
+  const allSelected = domainTabs.every((t) => state.selectedTabs.has(t.id));
+  if (allSelected) {
+    domainTabs.forEach((t) => state.selectedTabs.delete(t.id));
+  } else {
+    domainTabs.forEach((t) => state.selectedTabs.add(t.id));
+  }
+  renderTabView();
+}
+
+async function closeDomainGroup(domain) {
+  const domainTabIds = state.filteredTabs
+    .filter((t) => getDomain(t.url) === domain)
+    .map((t) => t.id);
+  if (domainTabIds.length === 0) return;
+  try {
+    await chrome.tabs.remove(domainTabIds);
+    const domainTabIdSet = new Set(domainTabIds);
+    state.tabs = state.tabs.filter((t) => !domainTabIdSet.has(t.id));
+    domainTabIds.forEach((id) => state.selectedTabs.delete(id));
+    if (state.tabSort === 'custom') syncCustomOrder();
+    tabCountBadge.textContent = state.tabs.length;
+    renderTabView();
+    showToast(t('toast_group_closed', domainTabIds.length), 'success');
   } catch {
     showToast(t('toast_op_failed'), 'error');
   }
