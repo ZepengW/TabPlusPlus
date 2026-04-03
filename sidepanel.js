@@ -2,24 +2,9 @@
 
 'use strict';
 
-// ─── i18n helper ─────────────────────────────────────────────────────────────
-function t(key, ...subs) {
-  let msg = chrome.i18n.getMessage(key);
-  if (!msg) return key;
-  return subs.reduce((s, v, i) => s.replaceAll('{' + (i + 1) + '}', String(v)), msg);
-}
-
-function applyI18n() {
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    el.textContent = t(el.dataset.i18n);
-  });
-  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
-    el.placeholder = t(el.dataset.i18nPlaceholder);
-  });
-  document.querySelectorAll('[data-i18n-title]').forEach((el) => {
-    el.title = t(el.dataset.i18nTitle);
-  });
-}
+// ─── i18n helper (delegates to shared TabI18n module) ────────────────────────
+function t(key, ...subs) { return TabI18n.t(key, ...subs); }
+function applyI18n() { TabI18n.applyI18n(); }
 
 // ─── Default Settings ────────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
@@ -95,7 +80,8 @@ const breadcrumb     = $('breadcrumb');
 
 // ─── Initialisation ──────────────────────────────────────────────────────────
 async function init() {
-  // Apply i18n strings first so UI is localised before any async load
+  // Load language preference then apply i18n so UI is localised before any async load
+  await TabI18n.init();
   applyI18n();
   // Initialise bookmarkPath title after i18n is applied
   state.bookmarkPath = [{ id: '0', title: t('all_bookmarks') }];

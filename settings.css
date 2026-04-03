@@ -195,6 +195,16 @@ html, body {
   accent-color: var(--primary); cursor: pointer;
 }
 
+/* --- Select ---------------------------------------- */
+.sp-select {
+  background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm); padding: 6px 10px; font-size: 13px;
+  color: var(--text-primary); outline: none; cursor: pointer;
+  transition: border-color var(--transition);
+  flex-shrink: 0;
+}
+.sp-select:focus { border-color: var(--border-focus); }
+
 /* --- Number Input --------------------------------- */
 .sp-number-input {
   width: 70px; background: var(--bg); border: 1.5px solid var(--border);

@@ -2,22 +2,14 @@
 
 'use strict';
 
-// ─── i18n helper ─────────────────────────────────────────────────────────────
-function t(key, ...subs) {
-  let msg = chrome.i18n.getMessage(key);
-  if (!msg) return key;
-  return subs.reduce((s, v, i) => s.replaceAll('{' + (i + 1) + '}', String(v)), msg);
-}
-
-function applyI18n() {
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    el.textContent = t(el.dataset.i18n);
-  });
-}
+// ─── i18n helper (delegates to shared TabI18n module) ────────────────────────
+function t(key, ...subs) { return TabI18n.t(key, ...subs); }
+function applyI18n() { TabI18n.applyI18n(); }
 
 const $ = (id) => document.getElementById(id);
 
 async function init() {
+  await TabI18n.init();
   applyI18n();
   await Promise.all([loadStats(), loadSessions()]);
 

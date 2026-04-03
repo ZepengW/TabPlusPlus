@@ -25,6 +25,14 @@
 
         <section class="sp-section">
           <h2 class="sp-section-title" data-i18n="settings_general">General</h2>
+          <div class="sp-item">
+            <span class="sp-item-label" data-i18n="settings_language">Language</span>
+            <select id="settingLanguage" class="sp-select">
+              <option value="auto" data-i18n="settings_language_auto">Auto (follow browser)</option>
+              <option value="en" data-i18n="settings_language_en">English</option>
+              <option value="zh_CN" data-i18n="settings_language_zh_cn">中文（简体）</option>
+            </select>
+          </div>
           <label class="sp-item">
             <span class="sp-item-label" data-i18n="settings_remember_view">Remember last view (Tabs / Bookmarks)</span>
             <input type="checkbox" id="settingRememberView" class="sp-toggle" />
@@ -108,6 +116,7 @@
     <div class="sp-toast-container" id="toastContainer"></div>
   </div>
 
+  <script src="i18n.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>
