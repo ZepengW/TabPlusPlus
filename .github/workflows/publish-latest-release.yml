@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       asset_name:
-        description: "Release asset file name to publish"
+        description: "Release asset file name"
         required: false
         default: "extension.zip"
         type: string
@@ -13,30 +13,11 @@ permissions:
   contents: read
 
 jobs:
-  publish-latest-release:
-    name: Publish latest release asset
+  publish:
     runs-on: ubuntu-latest
     environment: publish
 
     steps:
-      - name: Show latest release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          gh release view \
-            --json tagName,name,isDraft,isPrerelease,publishedAt,assets \
-            --jq '{
-              tagName,
-              name,
-              isDraft,
-              isPrerelease,
-              publishedAt,
-              assets: [.assets[].name]
-            }'
-
       - name: Download latest release asset
         env:
           GH_TOKEN: ${{ github.token }}
@@ -62,13 +43,3 @@ jobs:
           oauth-client-id: ${{ secrets.CHROME_CLIENT_ID }}
           oauth-client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           oauth-refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-
-      - name: Publish summary
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          TAG=$(gh release view --json tagName --jq '.tagName')
-          echo "Published latest GitHub release: $TAG"
