@@ -11,7 +11,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 有 package.json 才构建
       - name: Install dependencies & build
         run: |
           if [ -f package.json ]; then
@@ -19,28 +18,26 @@ jobs:
             npm run build --if-present
           fi
 
-      # 只压缩 1 次
       - name: Pack extension into ZIP
         run: |
           DIR="dist"
           [ -d "$DIR" ] || DIR="."
-          zip -j extension.zip "$DIR"/* \
+          zip -r extension.zip "$DIR" \
             -x "*.git*" "node_modules/*" ".github/*" "*.md"
 
-      # 上传一次
       - name: Upload extension
-        uses: upload-artifact@v4
+        uses: actions/upload-artifact@v4  # 已修复
         with:
           name: extension
           path: extension.zip
 
-  # 发布阶段：直接使用已构建好的 ZIP
   publish:
     needs: build
     runs-on: ubuntu-latest
     environment: publish
     steps:
-      - uses: download-artifact@v4
+      - name: Download extension
+        uses: actions/download-artifact@v4  # 已修复
         with:
           name: extension
 
