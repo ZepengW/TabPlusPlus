@@ -7,6 +7,22 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      force_publish:
+        description: 'Force publish even if manifest version did not change'
+        required: false
+        default: false
+        type: boolean
+      publish_chrome_web_store:
+        description: 'Publish to Chrome Web Store'
+        required: false
+        default: true
+        type: boolean
+      create_github_release:
+        description: 'Create GitHub tag and GitHub Release'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -20,6 +36,7 @@ jobs:
       old_version: ${{ steps.check.outputs.old_version }}
       new_version: ${{ steps.check.outputs.new_version }}
       manifest_file: ${{ steps.check.outputs.manifest_file }}
+      should_publish: ${{ steps.decide.outputs.should_publish }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,10 +86,31 @@ jobs:
             echo "Version not changed."
           fi
 
+      - name: Decide whether to publish
+        id: decide
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION_CHANGED="${{ steps.check.outputs.version_changed }}"
+          EVENT_NAME="${{ github.event_name }}"
+          FORCE_PUBLISH="${{ inputs.force_publish || false }}"
+
+          if [ "$VERSION_CHANGED" = "true" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "Publishing because version changed."
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ] && [ "$FORCE_PUBLISH" = "true" ]; then
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "Publishing because manual force_publish=true."
+          else
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "Not publishing."
+          fi
+
   build:
     name: Build and pack extension
     needs: detect-version
-    if: needs.detect-version.outputs.version_changed == 'true'
+    if: needs.detect-version.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
     outputs:
       package_dir: ${{ steps.package_dir.outputs.dir }}
@@ -148,7 +186,7 @@ jobs:
   publish-chrome-web-store:
     name: Publish to Chrome Web Store
     needs: [detect-version, build]
-    if: needs.detect-version.outputs.version_changed == 'true'
+    if: needs.detect-version.outputs.should_publish == 'true' && (github.event_name != 'workflow_dispatch' || inputs.publish_chrome_web_store)
     runs-on: ubuntu-latest
     environment: publish
     steps:
@@ -174,7 +212,7 @@ jobs:
   github-release:
     name: Create GitHub Release
     needs: [detect-version, build]
-    if: needs.detect-version.outputs.version_changed == 'true'
+    if: needs.detect-version.outputs.should_publish == 'true' && (github.event_name != 'workflow_dispatch' || inputs.create_github_release)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
