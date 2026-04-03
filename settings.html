@@ -41,23 +41,10 @@
             <span class="sp-item-label" data-i18n="settings_remember_filters">Remember filter &amp; sort preferences</span>
             <input type="checkbox" id="settingRememberFilters" class="sp-toggle" />
           </label>
-          <div class="sp-item">
-            <span class="sp-item-label" data-i18n="settings_overlay_position">Overlay panel position</span>
-            <div class="sp-radio-group">
-              <label class="sp-radio-label">
-                <input type="radio" name="overlayPosition" value="right" id="overlayPosRight" />
-                <span data-i18n="settings_overlay_right">Right</span>
-              </label>
-              <label class="sp-radio-label">
-                <input type="radio" name="overlayPosition" value="left" id="overlayPosLeft" />
-                <span data-i18n="settings_overlay_left">Left</span>
-              </label>
-            </div>
-          </div>
           <div class="sp-item sp-item-info">
             <span class="sp-item-label">
-              This setting applies to the floating overlay panel only. For the browser's built-in sidebar position (left&nbsp;/&nbsp;right), please configure it in your browser settings:
-              <a href="#" id="browserSidebarSettingsLink">chrome://settings/appearance</a>.
+              <span data-i18n="settings_browser_sidebar_info">To change the browser's built-in sidebar position (left / right), go to:</span>
+              <a href="#" id="browserSidebarSettingsLink">chrome://settings/appearance</a>
             </span>
           </div>
         </section>
@@ -94,15 +81,13 @@
           <label class="sp-item">
             <span class="sp-item-label">
               <span data-i18n="settings_nav_shortcut">Enable sidebar tab navigation shortcuts</span>
-              <span class="sp-item-hint">Navigate tabs in sidebar order using custom keyboard shortcuts (configure at <a href="#" id="shortcutSettingsLink">chrome://extensions/shortcuts</a>)</span>
+              <span class="sp-item-hint"><span data-i18n="settings_nav_shortcut_hint">Navigate tabs in sidebar order using custom keyboard shortcuts</span> (<a href="#" id="shortcutSettingsLink">chrome://extensions/shortcuts</a>)</span>
             </span>
             <input type="checkbox" id="settingTabNavShortcut" class="sp-toggle" />
           </label>
           <div class="sp-item sp-item-info" id="shortcutInfoRow">
             <span class="sp-item-label">
-              Assign shortcuts for <strong>Switch to next tab in sidebar order</strong> and <strong>Switch to previous tab in sidebar order</strong> at
-              <a href="#" id="shortcutSettingsLink2">chrome://extensions/shortcuts</a>.
-              <br/>Note: Ctrl+Tab and Ctrl+Shift+Tab are reserved by the browser and cannot be reassigned to extensions.
+              <span data-i18n="settings_shortcut_info_1">Assign shortcuts for </span><strong data-i18n="cmd_next_tab">Switch to next tab in sidebar order</strong><span data-i18n="settings_shortcut_info_2"> and </span><strong data-i18n="cmd_prev_tab">Switch to previous tab in sidebar order</strong><span data-i18n="settings_shortcut_info_3"> at </span><a href="#" id="shortcutSettingsLink2">chrome://extensions/shortcuts</a><span data-i18n="settings_shortcut_note">. Note: Ctrl+Tab and Ctrl+Shift+Tab are reserved by the browser and cannot be reassigned to extensions.</span>
             </span>
           </div>
         </section>
