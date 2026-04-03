@@ -11,32 +11,36 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      # 有 package.json 才构建
+      - name: Install dependencies & build
         run: |
           if [ -f package.json ]; then
             npm install
-            npm run build || true
+            npm run build --if-present
           fi
 
+      # 只压缩 1 次
       - name: Pack extension into ZIP
         run: |
           DIR="dist"
           [ -d "$DIR" ] || DIR="."
-          zip -r extension.zip "$DIR" \
+          zip -j extension.zip "$DIR"/* \
             -x "*.git*" "node_modules/*" ".github/*" "*.md"
 
+      # 上传一次
       - name: Upload extension
-        uses: actions/upload-artifact@v4
+        uses: upload-artifact@v4
         with:
           name: extension
           path: extension.zip
 
+  # 发布阶段：直接使用已构建好的 ZIP
   publish:
     needs: build
     runs-on: ubuntu-latest
     environment: publish
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: download-artifact@v4
         with:
           name: extension
 
@@ -45,6 +49,6 @@ jobs:
         with:
           extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
           client-id: ${{ secrets.CHROME_CLIENT_ID }}
-          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }} # 这行你之前缺了！
+          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
           zip-path: extension.zip
