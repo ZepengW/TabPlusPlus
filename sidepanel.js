@@ -28,7 +28,7 @@ const DEFAULT_SETTINGS = {
   bookmarkViewMode: 'flat',  // 'flat' | 'tree'
   showRecentBookmarks: true,
   recentBookmarksCount: 5,
-  enableTabNavShortcut: false, // enable keyboard shortcut for tab navigation in panel order
+  enableTabNavShortcut: true, // enable keyboard shortcut for tab navigation in panel order
 };
 
 const OPEN_ALL_CONFIRM_THRESHOLD = 10;
@@ -62,6 +62,7 @@ const state = {
   tabGroups: [],          // chrome.TabGroup[] – native Chrome tab groups
   selectedGroupColor: 'blue', // color selected in group modal
   groupModalTarget: null, // { group: TabGroup|null, tabIds: number[]|null }
+  collapsedDomainGroups: new Set(), // domain strings whose groups are collapsed
 
   bookmarks: [],          // current folder nodes
   bookmarkPath: [{ id: '0', title: '' }],
@@ -340,20 +341,12 @@ function renderGrouped(tabs) {
   const colors = ['#667eea','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316'];
   let colorIdx = 0;
   domainGroups.forEach((domainTabs, domain) => {
-    const header = document.createElement('div');
-    header.className = 'group-header';
-    const dot = document.createElement('div');
-    dot.className = 'group-dot';
-    dot.style.background = colors[colorIdx % colors.length];
+    const color = colors[colorIdx % colors.length];
     colorIdx++;
-    const label = document.createElement('span');
-    label.textContent = domain;
-    const count = document.createElement('span');
-    count.className = 'group-count';
-    count.textContent = domainTabs.length;
-    header.append(dot, label, count);
-    frag.appendChild(header);
-    domainTabs.forEach((tab) => frag.appendChild(createTabItem(tab)));
+    frag.appendChild(createDomainGroupHeader(domain, domainTabs.length, color));
+    if (!state.collapsedDomainGroups.has(domain)) {
+      domainTabs.forEach((tab) => frag.appendChild(createTabItem(tab)));
+    }
   });
   tabList.innerHTML = '';
   tabList.appendChild(frag);
@@ -392,19 +385,12 @@ function renderWithNativeGroups(tabs) {
       const colors = ['#667eea','#f59e0b','#10b981','#ef4444','#8b5cf6','#06b6d4','#f97316'];
       let colorIdx = 0;
       domainGroups.forEach((domainTabs, domain) => {
-        const header = document.createElement('div');
-        header.className = 'group-header';
-        const dot = document.createElement('div');
-        dot.className = 'group-dot';
-        dot.style.background = colors[colorIdx++ % colors.length];
-        const label = document.createElement('span');
-        label.textContent = domain;
-        const count = document.createElement('span');
-        count.className = 'group-count';
-        count.textContent = domainTabs.length;
-        header.append(dot, label, count);
-        frag.appendChild(header);
-        domainTabs.forEach((tab) => frag.appendChild(createTabItem(tab)));
+        const color = colors[colorIdx % colors.length];
+        colorIdx++;
+        frag.appendChild(createDomainGroupHeader(domain, domainTabs.length, color));
+        if (!state.collapsedDomainGroups.has(domain)) {
+          domainTabs.forEach((tab) => frag.appendChild(createTabItem(tab)));
+        }
       });
     } else {
       ungrouped.forEach((tab) => frag.appendChild(createTabItem(tab)));
@@ -413,6 +399,121 @@ function renderWithNativeGroups(tabs) {
 
   tabList.innerHTML = '';
   tabList.appendChild(frag);
+}
+
+function createDomainGroupHeader(domain, tabCount, color) {
+  const header = document.createElement('div');
+  header.className = 'group-header';
+  header.dataset.domain = domain;
+  header.draggable = true;
+
+  const dot = document.createElement('div');
+  dot.className = 'group-dot';
+  dot.style.background = color;
+
+  const isCollapsed = state.collapsedDomainGroups.has(domain);
+  const collapseBtn = document.createElement('button');
+  collapseBtn.className = 'group-collapse-btn';
+  collapseBtn.title = isCollapsed ? t('group_expand') : t('group_collapse');
+  collapseBtn.innerHTML = isCollapsed ? chevronRightSvg() : chevronDownSvg();
+  collapseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleDomainGroupCollapse(domain);
+  });
+
+  const label = document.createElement('span');
+  label.textContent = domain;
+
+  const count = document.createElement('span');
+  count.className = 'group-count';
+  count.textContent = tabCount;
+
+  // Drag handlers for group reordering
+  header.addEventListener('dragstart', (e) => {
+    e.stopPropagation();
+    dragSrcDomain = domain;
+    dragSrcId = null;
+    dragSrcGroupId = null;
+    dragSrcTabGroupId = -1;
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  header.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const el = e.currentTarget;
+    const rect = el.getBoundingClientRect();
+    el.classList.remove('drag-over-before', 'drag-over-after');
+    el.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-before' : 'drag-over-after');
+  });
+  header.addEventListener('dragleave', (e) => {
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      e.currentTarget.classList.remove('drag-over-before', 'drag-over-after');
+    }
+  });
+  header.addEventListener('dragend', (e) => {
+    e.currentTarget.classList.remove('dragging', 'drag-over-before', 'drag-over-after');
+    tabList.querySelectorAll('.drag-over, .drag-over-before, .drag-over-after')
+      .forEach((el) => el.classList.remove('drag-over', 'drag-over-before', 'drag-over-after'));
+    dragSrcDomain = null;
+    dragSrcTabGroupId = -1;
+  });
+  header.addEventListener('drop', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const insertAfter = e.currentTarget.classList.contains('drag-over-after');
+    e.currentTarget.classList.remove('drag-over-before', 'drag-over-after');
+    const targetDomain = e.currentTarget.dataset.domain;
+
+    if (dragSrcId !== null) {
+      // A single tab dropped on a domain group header → move before/after first tab of this domain
+      const domainTabIds = state.filteredTabs
+        .filter((t) => getDomain(t.url) === targetDomain)
+        .map((t) => t.id);
+      const order = getOrBuildCustomOrder();
+      const refId = insertAfter
+        ? [...order].reverse().find((id) => domainTabIds.includes(id))
+        : order.find((id) => domainTabIds.includes(id));
+      if (refId !== undefined && dragSrcId !== refId) {
+        state.customTabOrder = insertAfter
+          ? applyReorderAfter([dragSrcId], refId, order)
+          : applyReorder([dragSrcId], refId, order);
+        switchToCustomSort();
+      }
+    } else if (dragSrcDomain !== null && dragSrcDomain !== targetDomain) {
+      // A domain group dragged onto another domain group → reorder
+      const srcTabIds = state.filteredTabs
+        .filter((t) => getDomain(t.url) === dragSrcDomain)
+        .map((t) => t.id);
+      const tgtTabIds = state.filteredTabs
+        .filter((t) => getDomain(t.url) === targetDomain)
+        .map((t) => t.id);
+      const order = getOrBuildCustomOrder();
+      const refId = insertAfter
+        ? [...order].reverse().find((id) => tgtTabIds.includes(id))
+        : order.find((id) => tgtTabIds.includes(id));
+      if (srcTabIds.length > 0 && refId !== undefined) {
+        state.customTabOrder = insertAfter
+          ? applyReorderAfter(srcTabIds, refId, order)
+          : applyReorder(srcTabIds, refId, order);
+        switchToCustomSort();
+      }
+    }
+    dragSrcDomain = null;
+    dragSrcId = null;
+  });
+
+  header.append(dot, collapseBtn, label, count);
+  return header;
+}
+
+function toggleDomainGroupCollapse(domain) {
+  if (state.collapsedDomainGroups.has(domain)) {
+    state.collapsedDomainGroups.delete(domain);
+  } else {
+    state.collapsedDomainGroups.add(domain);
+  }
+  renderTabView();
 }
 
 function createNativeGroupHeader(group, tabCount) {
@@ -426,51 +527,69 @@ function createNativeGroupHeader(group, tabCount) {
     e.stopPropagation();
     dragSrcGroupId = group.id;
     dragSrcId = null;
+    dragSrcDomain = null;
+    dragSrcTabGroupId = -1;
     e.currentTarget.classList.add('dragging');
     e.dataTransfer.effectAllowed = 'move';
   });
   header.addEventListener('dragover', (e) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
-    e.currentTarget.classList.add('drag-over');
+    const el = e.currentTarget;
+    el.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+    if (dragSrcGroupId !== null) {
+      // Group-on-group: show before/after indicator
+      const rect = el.getBoundingClientRect();
+      el.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-before' : 'drag-over-after');
+    } else if (dragSrcId !== null || dragSrcDomain !== null) {
+      // Tab or domain group dropped on native group header: show join indicator
+      el.classList.add('drag-over');
+    }
   });
   header.addEventListener('dragleave', (e) => {
-    e.currentTarget.classList.remove('drag-over');
+    if (!e.currentTarget.contains(e.relatedTarget)) {
+      e.currentTarget.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
+    }
   });
   header.addEventListener('dragend', (e) => {
-    e.currentTarget.classList.remove('dragging', 'drag-over');
-    tabList.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+    e.currentTarget.classList.remove('dragging', 'drag-over', 'drag-over-before', 'drag-over-after');
+    tabList.querySelectorAll('.drag-over, .drag-over-before, .drag-over-after')
+      .forEach((el) => el.classList.remove('drag-over', 'drag-over-before', 'drag-over-after'));
     dragSrcGroupId = null;
+    dragSrcTabGroupId = -1;
   });
   header.addEventListener('drop', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    e.currentTarget.classList.remove('drag-over');
+    const insertAfter = e.currentTarget.classList.contains('drag-over-after');
+    e.currentTarget.classList.remove('drag-over', 'drag-over-before', 'drag-over-after');
     const targetGroupId = parseInt(e.currentTarget.dataset.groupId, 10);
 
     if (dragSrcGroupId !== null && dragSrcGroupId !== targetGroupId) {
-      // Group dragged onto another group header → move src group before target group
+      // Group dragged onto another group header → move src group before/after target group
       const srcTabIds = getGroupTabIds(dragSrcGroupId);
       const tgtTabIds = getGroupTabIds(targetGroupId);
       const order = getOrBuildCustomOrder();
-      // Find the first tab of the target group in the order
-      const firstTgtId = order.find((id) => tgtTabIds.includes(id));
-      if (srcTabIds.length > 0 && firstTgtId !== undefined) {
-        state.customTabOrder = applyReorder(srcTabIds, firstTgtId, order);
+      const refId = insertAfter
+        ? [...order].reverse().find((id) => tgtTabIds.includes(id))
+        : order.find((id) => tgtTabIds.includes(id));
+      if (srcTabIds.length > 0 && refId !== undefined) {
+        state.customTabOrder = insertAfter
+          ? applyReorderAfter(srcTabIds, refId, order)
+          : applyReorder(srcTabIds, refId, order);
         switchToCustomSort();
       }
     } else if (dragSrcId !== null) {
-      // Single tab dragged onto a group header → place before first tab of that group
-      const tgtTabIds = getGroupTabIds(targetGroupId);
-      const order = getOrBuildCustomOrder();
-      const firstTgtId = order.find((id) => tgtTabIds.includes(id));
-      if (firstTgtId !== undefined && dragSrcId !== firstTgtId) {
-        state.customTabOrder = applyReorder([dragSrcId], firstTgtId, order);
-        switchToCustomSort();
+      // Single tab dragged onto a native group header → add to this Chrome group
+      if (dragSrcTabGroupId !== targetGroupId) {
+        chrome.tabs.group({ tabIds: [dragSrcId], groupId: targetGroupId })
+          .then(() => loadTabs())
+          .catch(() => showToast(t('toast_op_failed'), 'error'));
       }
     }
     dragSrcId = null;
     dragSrcGroupId = null;
+    dragSrcDomain = null;
   });
 
   const colorDot = document.createElement('div');
@@ -834,12 +953,17 @@ function toggleGroupBy() {
 }
 
 // ─── Drag & Drop Reorder ─────────────────────────────────────────────────────
-let dragSrcId = null;
-let dragSrcGroupId = null;
+let dragSrcId = null;         // tab ID being dragged
+let dragSrcGroupId = null;    // native Chrome group ID being dragged (from group header)
+let dragSrcDomain = null;     // domain string being dragged (from domain group header)
+let dragSrcTabGroupId = -1;   // Chrome groupId the dragged tab belongs to (-1 if ungrouped)
 
 function onDragStart(e) {
   dragSrcId = parseInt(e.currentTarget.dataset.tabId, 10);
   dragSrcGroupId = null;
+  dragSrcDomain = null;
+  const tab = state.tabs.find((t) => t.id === dragSrcId);
+  dragSrcTabGroupId = tab?.groupId ?? -1;
   e.currentTarget.classList.add('dragging');
   e.dataTransfer.effectAllowed = 'move';
 }
@@ -847,38 +971,81 @@ function onDragStart(e) {
 function onDragOver(e) {
   e.preventDefault();
   e.dataTransfer.dropEffect = 'move';
-  e.currentTarget.classList.add('drag-over');
+  const el = e.currentTarget;
+  const rect = el.getBoundingClientRect();
+  el.classList.remove('drag-over-before', 'drag-over-after');
+  el.classList.add(e.clientY < rect.top + rect.height / 2 ? 'drag-over-before' : 'drag-over-after');
 }
 
 function onDragLeave(e) {
-  e.currentTarget.classList.remove('drag-over');
+  if (!e.currentTarget.contains(e.relatedTarget)) {
+    e.currentTarget.classList.remove('drag-over-before', 'drag-over-after');
+  }
 }
 
 function onDragEnd(e) {
-  e.currentTarget.classList.remove('dragging', 'drag-over');
-  tabList.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+  e.currentTarget.classList.remove('dragging', 'drag-over-before', 'drag-over-after');
+  tabList.querySelectorAll('.drag-over, .drag-over-before, .drag-over-after')
+    .forEach((el) => el.classList.remove('drag-over', 'drag-over-before', 'drag-over-after'));
   dragSrcId = null;
   dragSrcGroupId = null;
+  dragSrcDomain = null;
+  dragSrcTabGroupId = -1;
 }
 
 function onDrop(e) {
   e.preventDefault();
-  e.currentTarget.classList.remove('drag-over');
+  const insertAfter = e.currentTarget.classList.contains('drag-over-after');
+  e.currentTarget.classList.remove('drag-over-before', 'drag-over-after');
   const targetId = parseInt(e.currentTarget.dataset.tabId, 10);
   if (!targetId) return;
 
   if (dragSrcGroupId !== null) {
-    // A group is being dragged – move all its tabs before this tab
+    // A native group is being dragged – move all its tabs before/after this tab
     const groupTabIds = getGroupTabIds(dragSrcGroupId);
     if (groupTabIds.length > 0) {
-      state.customTabOrder = applyReorder(groupTabIds, targetId, getOrBuildCustomOrder());
+      const order = getOrBuildCustomOrder();
+      state.customTabOrder = insertAfter
+        ? applyReorderAfter(groupTabIds, targetId, order)
+        : applyReorder(groupTabIds, targetId, order);
+      switchToCustomSort();
+    }
+    return;
+  }
+
+  if (dragSrcDomain !== null) {
+    // A domain group is being dragged – move all its tabs before/after this tab
+    const srcTabIds = state.filteredTabs
+      .filter((t) => getDomain(t.url) === dragSrcDomain)
+      .map((t) => t.id);
+    if (srcTabIds.length > 0 && !srcTabIds.includes(targetId)) {
+      const order = getOrBuildCustomOrder();
+      state.customTabOrder = insertAfter
+        ? applyReorderAfter(srcTabIds, targetId, order)
+        : applyReorder(srcTabIds, targetId, order);
       switchToCustomSort();
     }
     return;
   }
 
   if (!dragSrcId || dragSrcId === targetId) return;
-  state.customTabOrder = applyReorder([dragSrcId], targetId, getOrBuildCustomOrder());
+
+  // If the dragged tab is in a native group and the target is ungrouped → ungroup the tab
+  if (dragSrcTabGroupId !== -1) {
+    const targetTab = state.tabs.find((t) => t.id === targetId);
+    if (targetTab && targetTab.groupId === -1) {
+      chrome.tabs.ungroup([dragSrcId])
+        .then(() => loadTabs())
+        .catch(() => showToast(t('toast_op_failed'), 'error'));
+      return;
+    }
+  }
+
+  // Panel-only reorder
+  const order = getOrBuildCustomOrder();
+  state.customTabOrder = insertAfter
+    ? applyReorderAfter([dragSrcId], targetId, order)
+    : applyReorder([dragSrcId], targetId, order);
   switchToCustomSort();
 }
 
@@ -912,6 +1079,19 @@ function applyReorder(idsToMove, beforeId, order) {
   const pos = rest.indexOf(beforeId);
   if (pos !== -1) {
     rest.splice(pos, 0, ...idsToMove);
+  } else {
+    rest.push(...idsToMove);
+  }
+  return rest;
+}
+
+/** Move `idsToMove` to just after `afterId` in `order`. Returns a new array. */
+function applyReorderAfter(idsToMove, afterId, order) {
+  const moveSet = new Set(idsToMove);
+  const rest = order.filter((id) => !moveSet.has(id));
+  const pos = rest.indexOf(afterId);
+  if (pos !== -1) {
+    rest.splice(pos + 1, 0, ...idsToMove);
   } else {
     rest.push(...idsToMove);
   }
