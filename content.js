@@ -11,6 +11,7 @@
   const PANEL_WIDTH = 360;
   const MAX_Z_INDEX = 2147483647; // Max safe CSS z-index value
   let isVisible = false;
+  let currentPosition = 'right'; // 'right' | 'left'
 
   // ─── Overlay container ──────────────────────────────────────────────────────
   const container = document.createElement('div');
@@ -81,6 +82,28 @@
   document.documentElement.appendChild(container);
   document.documentElement.appendChild(triggerTab);
 
+  // ─── Apply position (left / right) ─────────────────────────────────────────
+  function applyPosition(pos) {
+    currentPosition = pos;
+    const isLeft = pos === 'left';
+    const slideOffset = isLeft ? '-24px' : '24px';
+
+    // Container
+    container.style.right = isLeft ? '' : '16px';
+    container.style.left  = isLeft ? '16px' : '';
+
+    // Update hidden transform so slide-in direction matches side
+    if (!isVisible) {
+      container.style.transform = `translateX(${slideOffset})`;
+    }
+
+    // Trigger tab
+    triggerTab.style.right        = isLeft ? ''  : '0';
+    triggerTab.style.left         = isLeft ? '0' : '';
+    triggerTab.style.borderRadius = isLeft ? '0 8px 8px 0' : '8px 0 0 8px';
+    triggerTab.style.boxShadow    = isLeft ? '2px 0 8px rgba(0,0,0,.18)' : '-2px 0 8px rgba(0,0,0,.18)';
+  }
+
   // ─── Show / Hide helpers ────────────────────────────────────────────────────
   function show() {
     isVisible = true;
@@ -94,7 +117,8 @@
   function hide() {
     isVisible = false;
     container.style.opacity      = '0';
-    container.style.transform    = 'translateX(24px)';
+    const slideOffset = currentPosition === 'left' ? '-24px' : '24px';
+    container.style.transform    = `translateX(${slideOffset})`;
     container.style.pointerEvents= 'none';
     triggerTab.style.opacity      = '1';
     triggerTab.style.pointerEvents= 'auto';
@@ -107,6 +131,25 @@
 
   // Trigger tab click expands the panel
   triggerTab.addEventListener('click', show);
+
+  // ─── Load position from settings ────────────────────────────────────────────
+  chrome.storage.local.get('settings', (result) => {
+    const pos = (result.settings && result.settings.overlayPosition) || 'right';
+    applyPosition(pos);
+    // Show trigger tab now that position is applied
+    triggerTab.style.opacity      = '1';
+    triggerTab.style.pointerEvents= 'auto';
+  });
+
+  // ─── React to settings changes ──────────────────────────────────────────────
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.settings) {
+      const newPos = (changes.settings.newValue && changes.settings.newValue.overlayPosition) || 'right';
+      if (newPos !== currentPosition) {
+        applyPosition(newPos);
+      }
+    }
+  });
 
   // ─── Messages from background script ───────────────────────────────────────
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {

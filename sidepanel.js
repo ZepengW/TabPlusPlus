@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS = {
   showRecentBookmarks: true,
   recentBookmarksCount: 5,
   enableTabNavShortcut: true, // enable keyboard shortcut for tab navigation in panel order
+  overlayPosition: 'right',  // 'right' | 'left'
 };
 
 const OPEN_ALL_CONFIRM_THRESHOLD = 10;
