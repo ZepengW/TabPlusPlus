@@ -1,0 +1,54 @@
+name: Build & Preview Chrome Extension
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install dependencies if needed
+        run: |
+          if [ -f package.json ]; then
+            npm install
+            npm run build || true
+          fi
+
+      - name: Zip extension
+        run: |
+          DIR="dist"
+          if [ ! -d "$DIR" ]; then
+            DIR="."
+          fi
+          zip -r extension.zip "$DIR" \
+            -x "*.git*" "node_modules/*" ".github/*" "*.md"
+
+      - name: Upload extension zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension
+          path: extension.zip
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: publish
+    steps:
+      - name: Download built extension
+        uses: actions/download-artifact@v4
+        with:
+          name: extension
+
+      - name: Publish to Chrome Web Store
+        uses: fregante/chrome-webstore-upload-action@main
+        with:
+          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+          client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+          zip-path: extension.zip
