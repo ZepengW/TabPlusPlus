@@ -45,9 +45,6 @@ function applyToUI(s) {
   const bmRadio = document.querySelector(`input[name="bookmarkViewMode"][value="${s.bookmarkViewMode}"]`);
   if (bmRadio) bmRadio.checked = true;
 
-  const posRadio = document.querySelector(`input[name="overlayPosition"][value="${s.overlayPosition || 'right'}"]`);
-  if (posRadio) posRadio.checked = true;
-
   $('recentCountRow').classList.toggle('hidden', !s.showRecentBookmarks);
 }
 
@@ -75,7 +72,6 @@ function readFromUI() {
     recentBookmarksCount: parseInt($('settingRecentCount').value, 10) || 5,
     bookmarkViewMode:    document.querySelector('input[name="bookmarkViewMode"]:checked')?.value || 'flat',
     enableTabNavShortcut: $('settingTabNavShortcut').checked,
-    overlayPosition:     document.querySelector('input[name="overlayPosition"]:checked')?.value || 'right',
     language:            $('settingLanguage').value || 'auto',
   };
 }
