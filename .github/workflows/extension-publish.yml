@@ -112,8 +112,6 @@ jobs:
     needs: detect-version
     if: needs.detect-version.outputs.should_publish == 'true'
     runs-on: ubuntu-latest
-    outputs:
-      package_dir: ${{ steps.package_dir.outputs.dir }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -160,26 +158,45 @@ jobs:
             exit 1
           fi
 
+      - name: Debug package directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "package_dir=${{ steps.package_dir.outputs.dir }}"
+          echo "workspace=$GITHUB_WORKSPACE"
+          pwd
+          ls -la
+          if [ -d dist ]; then
+            echo "--- dist contents ---"
+            ls -la dist
+          fi
+
       - name: Pack extension
         shell: bash
         run: |
           set -euo pipefail
 
           DIR="${{ steps.package_dir.outputs.dir }}"
-          cd "$DIR"
+          OUT="$GITHUB_WORKSPACE/extension.zip"
 
-          zip -r ../extension.zip . \
+          rm -f "$OUT"
+
+          cd "$DIR"
+          zip -r "$OUT" . \
             -x "*.git*" \
                "node_modules/*" \
                ".github/*" \
                "*.md" \
                "*.zip"
 
+          echo "Created package at: $OUT"
+          ls -lh "$OUT"
+
       - name: Upload extension artifact
         uses: actions/upload-artifact@v4
         with:
           name: extension
-          path: extension.zip
+          path: ${{ github.workspace }}/extension.zip
           if-no-files-found: error
 
   publish-chrome-web-store:
