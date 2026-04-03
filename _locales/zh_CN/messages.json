@@ -5,6 +5,7 @@
 
   "nav_tabs":      { "message": "\u6807\u7b7e\u9875" },
   "nav_bookmarks": { "message": "\u4e66\u7b7e" },
+  "nav_sessions":  { "message": "\u4f1a\u8bdd" },
 
   "search_tabs_placeholder":      { "message": "\u641c\u7d22\u6807\u7b7e\u9875\u2026" },
   "search_bookmarks_placeholder": { "message": "\u641c\u7d22\u4e66\u7b7e\u2026" },
@@ -94,6 +95,8 @@
   "toast_tab_closed":        { "message": "\u6807\u7b7e\u9875\u5df2\u5173\u95ed" },
   "toast_tabs_closed":       { "message": "\u5df2\u5173\u95ed {1} \u4e2a\u6807\u7b7e\u9875" },
   "toast_session_saved":     { "message": "\u4f1a\u8bdd\u5df2\u4fdd\u5b58\uff08{1} \u4e2a\u6807\u7b7e\u9875\uff09" },
+  "toast_session_restored":  { "message": "\u5df2\u6062\u590d {1} \u4e2a\u6807\u7b7e\u9875" },
+  "toast_session_deleted":   { "message": "\u4f1a\u8bdd\u5df2\u5220\u9664" },
   "toast_group_created":     { "message": "\u5206\u7ec4\u5df2\u521b\u5efa" },
   "toast_group_updated":     { "message": "\u5206\u7ec4\u5df2\u66f4\u65b0" },
   "toast_group_closed":      { "message": "\u5df2\u5173\u95ed {1} \u4e2a\u6807\u7b7e\u9875" },
@@ -161,6 +164,11 @@
   "popup_dupes_closed_one": { "message": "\u5df2\u5173\u95ed {1} \u4e2a\u91cd\u590d\u6807\u7b7e\u9875" },
   "popup_session_saved":  { "message": "\u4f1a\u8bdd\u5df2\u4fdd\u5b58\uff08{1} \u4e2a\u6807\u7b7e\u9875\uff09" },
   "popup_restored":       { "message": "\u5df2\u6062\u590d {1} \u4e2a\u6807\u7b7e\u9875" },
+
+  "session_list_empty":    { "message": "\u6682\u65e0\u4fdd\u5b58\u7684\u4f1a\u8bdd\u3002" },
+  "session_restore_btn":   { "message": "\u6062\u590d" },
+  "session_delete_btn":    { "message": "\u5220\u9664" },
+  "session_tabs_label":    { "message": "{1} \u4e2a\u6807\u7b7e\u9875" },
 
   "cmd_next_tab": { "message": "\u5207\u6362\u5230\u4fa7\u680f\u4e2d\u7684\u4e0b\u4e00\u4e2a\u6807\u7b7e\u9875" },
   "cmd_prev_tab": { "message": "\u5207\u6362\u5230\u4fa7\u680f\u4e2d\u7684\u4e0a\u4e00\u4e2a\u6807\u7b7e\u9875" }

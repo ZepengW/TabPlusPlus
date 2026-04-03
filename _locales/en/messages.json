@@ -5,6 +5,7 @@
 
   "nav_tabs":      { "message": "Tabs" },
   "nav_bookmarks": { "message": "Bookmarks" },
+  "nav_sessions":  { "message": "Sessions" },
 
   "search_tabs_placeholder":      { "message": "Search tabs\u2026" },
   "search_bookmarks_placeholder": { "message": "Search bookmarks\u2026" },
@@ -94,6 +95,8 @@
   "toast_tab_closed":        { "message": "Tab closed" },
   "toast_tabs_closed":       { "message": "Closed {1} tabs" },
   "toast_session_saved":     { "message": "Session saved ({1} tabs)" },
+  "toast_session_restored":  { "message": "Restored {1} tabs" },
+  "toast_session_deleted":   { "message": "Session deleted" },
   "toast_group_created":     { "message": "Group created" },
   "toast_group_updated":     { "message": "Group updated" },
   "toast_group_closed":      { "message": "Closed {1} tabs" },
@@ -161,6 +164,11 @@
   "popup_dupes_closed_one": { "message": "Closed {1} duplicate" },
   "popup_session_saved":  { "message": "Session saved ({1} tabs)" },
   "popup_restored":       { "message": "Restored {1} tabs" },
+
+  "session_list_empty":    { "message": "No saved sessions yet." },
+  "session_restore_btn":   { "message": "Restore" },
+  "session_delete_btn":    { "message": "Delete" },
+  "session_tabs_label":    { "message": "{1} tabs" },
 
   "cmd_next_tab": { "message": "Switch to next tab in sidebar order" },
   "cmd_prev_tab": { "message": "Switch to previous tab in sidebar order" }
