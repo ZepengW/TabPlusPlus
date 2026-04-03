@@ -1,55 +1,239 @@
 name: Build & Publish Chrome Extension
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true  # 🔥 直接消除 Node 警告
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+permissions:
+  contents: write
 
-      - name: Install dependencies & build
+jobs:
+  detect-version:
+    name: Detect version change
+    runs-on: ubuntu-latest
+    outputs:
+      version_changed: ${{ steps.check.outputs.version_changed }}
+      old_version: ${{ steps.check.outputs.old_version }}
+      new_version: ${{ steps.check.outputs.new_version }}
+      manifest_file: ${{ steps.check.outputs.manifest_file }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check manifest version change
+        id: check
+        shell: bash
         run: |
-          if [ -f package.json ]; then
+          set -euo pipefail
+
+          FILE=""
+          if [ -f manifest.json ]; then
+            FILE="manifest.json"
+          elif [ -f src/manifest.json ]; then
+            FILE="src/manifest.json"
+          elif [ -f public/manifest.json ]; then
+            FILE="public/manifest.json"
+          else
+            echo "No manifest.json found."
+            echo "version_changed=false" >> "$GITHUB_OUTPUT"
+            echo "old_version=" >> "$GITHUB_OUTPUT"
+            echo "new_version=" >> "$GITHUB_OUTPUT"
+            echo "manifest_file=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "manifest_file=$FILE" >> "$GITHUB_OUTPUT"
+
+          NEW_VERSION=$(python3 - <<PY
+import json
+with open("$FILE", "r", encoding="utf-8") as f:
+    print(json.load(f).get("version", ""))
+PY
+)
+
+          if git cat-file -e HEAD^:"$FILE" 2>/dev/null; then
+            OLD_VERSION=$(git show HEAD^:"$FILE" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version",""))')
+          else
+            OLD_VERSION=""
+          fi
+
+          echo "old_version=$OLD_VERSION" >> "$GITHUB_OUTPUT"
+          echo "new_version=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$NEW_VERSION" ] && [ "$OLD_VERSION" != "$NEW_VERSION" ]; then
+            echo "version_changed=true" >> "$GITHUB_OUTPUT"
+            echo "Version changed: $OLD_VERSION -> $NEW_VERSION"
+          else
+            echo "version_changed=false" >> "$GITHUB_OUTPUT"
+            echo "Version not changed."
+          fi
+
+  build:
+    name: Build and pack extension
+    needs: detect-version
+    if: needs.detect-version.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      package_dir: ${{ steps.package_dir.outputs.dir }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
             npm install
+          else
+            echo "No package.json found, skip install."
+          fi
+
+      - name: Build
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -f package.json ]; then
             npm run build --if-present
           fi
 
-      # 🔥 修复嵌套压缩包（正确打包）
-      - name: Pack extension correctly
+      - name: Decide package directory
+        id: package_dir
+        shell: bash
         run: |
-          DIR="dist"
-          [ -d "$DIR" ] || DIR="."
-          cd "$DIR"
-          zip -r ../extension.zip . \
-            -x "*.git*" "node_modules/*" ".github/*" "*.md" "*.zip"
+          set -euo pipefail
 
-      - name: Upload extension
+          if [ -f dist/manifest.json ]; then
+            echo "dir=dist" >> "$GITHUB_OUTPUT"
+          elif [ -f manifest.json ]; then
+            echo "dir=." >> "$GITHUB_OUTPUT"
+          else
+            echo "manifest.json not found in dist/ or project root."
+            exit 1
+          fi
+
+      - name: Pack extension
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          DIR="${{ steps.package_dir.outputs.dir }}"
+          cd "$DIR"
+
+          zip -r ../extension.zip . \
+            -x "*.git*" \
+               "node_modules/*" \
+               ".github/*" \
+               "*.md" \
+               "*.zip"
+
+      - name: Upload extension artifact
         uses: actions/upload-artifact@v4
         with:
           name: extension
           path: extension.zip
+          if-no-files-found: error
 
-  publish:
-    needs: build
+  publish-chrome-web-store:
+    name: Publish to Chrome Web Store
+    needs: [detect-version, build]
+    if: needs.detect-version.outputs.version_changed == 'true'
     runs-on: ubuntu-latest
     environment: publish
     steps:
-      - uses: actions/download-artifact@v4
+      - name: Download extension artifact
+        uses: actions/download-artifact@v4
         with:
           name: extension
 
       - name: Publish to Chrome Web Store
-        uses: fregante/chrome-webstore-upload-action@main
+        uses: browser-actions/release-chrome-extension@v0.2.1
         with:
           extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
-          client-id: ${{ secrets.CHROME_CLIENT_ID }}
-          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
-          refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
-          zip-path: extension.zip
+          extension-path: extension.zip
+          oauth-client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          oauth-client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          oauth-refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+
+      - name: Publish summary
+        shell: bash
+        run: |
+          echo "Published Chrome Web Store version: ${{ needs.detect-version.outputs.new_version }}"
+
+  github-release:
+    name: Create GitHub Release
+    needs: [detect-version, build]
+    if: needs.detect-version.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download extension artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: extension
+
+      - name: Create tag if missing
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="v${{ needs.detect-version.outputs.new_version }}"
+          git fetch --tags
+
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG="v${{ needs.detect-version.outputs.new_version }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, uploading asset if needed."
+            gh release upload "$TAG" extension.zip --clobber
+          else
+            gh release create "$TAG" extension.zip \
+              --title "$TAG" \
+              --generate-notes
+          fi
+
+      # 可选增强：后续你要接入 Copilot 自动整理 git log，
+      # 可以在这里先生成 release_notes.md，再改成：
+      # gh release create "$TAG" extension.zip --title "$TAG" --notes-file release_notes.md
+      #
+      # 当前先用 GitHub 原生自动生成 notes，更稳。
+
+      - name: Release summary
+        shell: bash
+        run: |
+          echo "Created GitHub Release for version: ${{ needs.detect-version.outputs.new_version }}"
