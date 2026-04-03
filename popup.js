@@ -2,9 +2,23 @@
 
 'use strict';
 
+// ─── i18n helper ─────────────────────────────────────────────────────────────
+function t(key, ...subs) {
+  let msg = chrome.i18n.getMessage(key);
+  if (!msg) return key;
+  return subs.reduce((s, v, i) => s.replaceAll('{' + (i + 1) + '}', String(v)), msg);
+}
+
+function applyI18n() {
+  document.querySelectorAll('[data-i18n]').forEach((el) => {
+    el.textContent = t(el.dataset.i18n);
+  });
+}
+
 const $ = (id) => document.getElementById(id);
 
 async function init() {
+  applyI18n();
   await Promise.all([loadStats(), loadSessions()]);
 
   $('btnOpenPanel').addEventListener('click', openSidePanel);
@@ -65,12 +79,17 @@ async function closeDuplicates() {
   });
 
   if (toClose.length === 0) {
-    showToast('No duplicate tabs found');
+    showToast(t('popup_no_dupes'));
     return;
   }
 
   await chrome.tabs.remove(toClose);
-  showToast(`Closed ${toClose.length} duplicate${toClose.length > 1 ? 's' : ''}`, 'success');
+  showToast(
+    toClose.length === 1
+      ? t('popup_dupes_closed_one', toClose.length)
+      : t('popup_dupes_closed', toClose.length),
+    'success'
+  );
   await loadStats();
 }
 
@@ -89,7 +108,7 @@ async function saveSession() {
   if (sessions.length > 10) sessions.length = 10;
   await chrome.storage.local.set({ sessions });
 
-  showToast(`Session saved (${validTabs.length} tabs)`, 'success');
+  showToast(t('popup_session_saved', validTabs.length), 'success');
   await loadSessions();
 }
 
@@ -99,7 +118,7 @@ async function loadSessions() {
   const container = $('sessionList');
 
   if (sessions.length === 0) {
-    container.innerHTML = '<p class="empty-msg">No saved sessions yet.</p>';
+    container.innerHTML = `<p class="empty-msg">${t('popup_no_sessions')}</p>`;
     return;
   }
 
@@ -126,7 +145,7 @@ async function loadSessions() {
 
     const restoreBtn = document.createElement('button');
     restoreBtn.className = 'session-restore';
-    restoreBtn.textContent = 'Restore';
+    restoreBtn.textContent = t('popup_restore');
     restoreBtn.addEventListener('click', () => restoreSession(session));
 
     item.append(meta, restoreBtn);
@@ -136,7 +155,7 @@ async function loadSessions() {
 
 async function restoreSession(session) {
   await Promise.all(session.tabs.map(({ url }) => chrome.tabs.create({ url, active: false })));
-  showToast(`Restored ${session.tabs.length} tabs`, 'success');
+  showToast(t('popup_restored', session.tabs.length), 'success');
 }
 
 // ─── Toast ────────────────────────────────────────────────────────────────────

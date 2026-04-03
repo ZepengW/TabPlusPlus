@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "TabPlusPlus",
+  "name": "__MSG_ext_name__",
   "version": "1.0.0",
-  "description": "智能一体化的Tab管理插件 - Smart all-in-one tab management extension",
+  "description": "__MSG_ext_description__",
+  "default_locale": "en",
   "permissions": [
     "tabs",
     "tabGroups",
@@ -18,7 +19,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "TabPlusPlus – click to open/close side panel",
+    "default_title": "__MSG_ext_action_title__",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
@@ -30,10 +31,10 @@
   },
   "commands": {
     "navigate-tab-next": {
-      "description": "Switch to next tab in sidebar order"
+      "description": "__MSG_cmd_next_tab__"
     },
     "navigate-tab-prev": {
-      "description": "Switch to previous tab in sidebar order"
+      "description": "__MSG_cmd_prev_tab__"
     }
   },
   "icons": {
