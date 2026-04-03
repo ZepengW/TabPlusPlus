@@ -520,7 +520,7 @@ function createDomainGroupHeader(domain, tabCount, color) {
   });
 
   actions.append(selectAllDomainBtn, closeDomainBtn);
-  header.append(dot, collapseBtn, label, count, actions);
+  header.append(dot, collapseBtn, label, actions, count);
   return header;
 }
 
@@ -658,7 +658,7 @@ function createNativeGroupHeader(group, tabCount) {
   });
 
   actions.append(selectAllGroupBtn, closeGroupBtn, editBtn, ungroupBtn);
-  header.append(colorDot, collapseBtn, titleSpan, countBadge, actions);
+  header.append(colorDot, collapseBtn, titleSpan, actions, countBadge);
   return header;
 }
 
