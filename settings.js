@@ -2,19 +2,9 @@
 
 'use strict';
 
-// ─── i18n helper ─────────────────────────────────────────────────────────────
-function t(key, ...subs) {
-  let msg = chrome.i18n.getMessage(key);
-  if (!msg) return key;
-  return subs.reduce((s, v, i) => s.replaceAll('{' + (i + 1) + '}', String(v)), msg);
-}
-
-function applyI18n() {
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    el.textContent = t(el.dataset.i18n);
-  });
-  document.title = t('settings_title') || document.title;
-}
+// ─── i18n helper (delegates to shared TabI18n module) ────────────────────────
+function t(key, ...subs) { return TabI18n.t(key, ...subs); }
+function applyI18n() { TabI18n.applyI18n(); }
 
 const DEFAULT_SETTINGS = {
   rememberLastView: true,
@@ -24,12 +14,14 @@ const DEFAULT_SETTINGS = {
   recentBookmarksCount: 5,
   enableTabNavShortcut: true,
   overlayPosition: 'right', // 'right' | 'left'
+  language: 'auto',         // 'auto' | 'en' | 'zh_CN'
 };
 
 const $ = (id) => document.getElementById(id);
 
 // ─── Init ────────────────────────────────────────────────────────────────────
 async function init() {
+  await TabI18n.init();
   applyI18n();
   await loadSettings();
   attachListeners();
@@ -48,6 +40,7 @@ function applyToUI(s) {
   $('settingShowRecent').checked      = s.showRecentBookmarks;
   $('settingRecentCount').value       = s.recentBookmarksCount;
   $('settingTabNavShortcut').checked  = s.enableTabNavShortcut;
+  $('settingLanguage').value          = s.language || 'auto';
 
   const bmRadio = document.querySelector(`input[name="bookmarkViewMode"][value="${s.bookmarkViewMode}"]`);
   if (bmRadio) bmRadio.checked = true;
@@ -60,9 +53,18 @@ function applyToUI(s) {
 
 // ─── Save ────────────────────────────────────────────────────────────────────
 async function saveSettings() {
+  const stored = await chrome.storage.local.get('settings');
+  const prevLang = stored.settings?.language || 'auto';
+
   const settings = readFromUI();
   await chrome.storage.local.set({ settings });
-  showToast(t('settings_saved'), 'success');
+
+  if (settings.language !== prevLang) {
+    showToast(t('settings_language_changed'), 'success');
+    setTimeout(() => location.reload(), 800);
+  } else {
+    showToast(t('settings_saved'), 'success');
+  }
 }
 
 function readFromUI() {
@@ -74,15 +76,23 @@ function readFromUI() {
     bookmarkViewMode:    document.querySelector('input[name="bookmarkViewMode"]:checked')?.value || 'flat',
     enableTabNavShortcut: $('settingTabNavShortcut').checked,
     overlayPosition:     document.querySelector('input[name="overlayPosition"]:checked')?.value || 'right',
+    language:            $('settingLanguage').value || 'auto',
   };
 }
 
 // ─── Reset ───────────────────────────────────────────────────────────────────
 async function resetSettings() {
   if (!confirm(t('settings_reset_confirm'))) return;
+  const stored = await chrome.storage.local.get('settings');
+  const prevLang = stored.settings?.language || 'auto';
+
   await chrome.storage.local.set({ settings: { ...DEFAULT_SETTINGS } });
   applyToUI({ ...DEFAULT_SETTINGS });
   showToast(t('settings_reset_done'), 'success');
+
+  if (DEFAULT_SETTINGS.language !== prevLang) {
+    setTimeout(() => location.reload(), 800);
+  }
 }
 
 // ─── Listeners ───────────────────────────────────────────────────────────────
