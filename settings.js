@@ -101,6 +101,12 @@ function attachListeners() {
   };
   $('shortcutSettingsLink').addEventListener('click', openShortcutsPage);
   $('shortcutSettingsLink2').addEventListener('click', openShortcutsPage);
+
+  // Open browser appearance settings for sidebar position configuration
+  $('browserSidebarSettingsLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: 'chrome://settings/appearance' });
+  });
 }
 
 // ─── Toast ───────────────────────────────────────────────────────────────────
