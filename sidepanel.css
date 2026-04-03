@@ -291,7 +291,7 @@ body {
 .group-header:hover .group-actions { opacity: 1; }
 
 .group-actions {
-  display: flex; gap: 2px; opacity: 0; transition: opacity var(--transition); flex-shrink: 0;
+  display: flex; gap: 2px; opacity: 0; transition: opacity var(--transition); flex-shrink: 0; margin-left: auto;
 }
 
 .group-collapse-btn {
@@ -309,7 +309,7 @@ body {
 }
 
 .group-count {
-  margin-left: auto; background: var(--border);
+  background: var(--border);
   color: var(--text-secondary); border-radius: var(--radius-pill);
   padding: 1px 7px; font-size: 10px;
 }
