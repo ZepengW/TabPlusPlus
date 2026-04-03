@@ -22,7 +22,7 @@ const DEFAULT_SETTINGS = {
   bookmarkViewMode: 'flat',
   showRecentBookmarks: true,
   recentBookmarksCount: 5,
-  enableTabNavShortcut: false,
+  enableTabNavShortcut: true,
 };
 
 const $ = (id) => document.getElementById(id);

@@ -31,9 +31,17 @@
   },
   "commands": {
     "navigate-tab-next": {
+      "suggested_key": {
+        "default": "Alt+Shift+Right",
+        "mac": "Alt+Shift+Right"
+      },
       "description": "__MSG_cmd_next_tab__"
     },
     "navigate-tab-prev": {
+      "suggested_key": {
+        "default": "Alt+Shift+Left",
+        "mac": "Alt+Shift+Left"
+      },
       "description": "__MSG_cmd_prev_tab__"
     }
   },
