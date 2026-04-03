@@ -1,0 +1,74 @@
+name: Publish Latest GitHub Release to Chrome Web Store
+
+on:
+  workflow_dispatch:
+    inputs:
+      asset_name:
+        description: "Release asset file name to publish"
+        required: false
+        default: "extension.zip"
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  publish-latest-release:
+    name: Publish latest release asset
+    runs-on: ubuntu-latest
+    environment: publish
+
+    steps:
+      - name: Show latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gh release view \
+            --json tagName,name,isDraft,isPrerelease,publishedAt,assets \
+            --jq '{
+              tagName,
+              name,
+              isDraft,
+              isPrerelease,
+              publishedAt,
+              assets: [.assets[].name]
+            }'
+
+      - name: Download latest release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ASSET_NAME="${{ inputs.asset_name }}"
+          mkdir -p release_asset
+
+          gh release download \
+            --pattern "$ASSET_NAME" \
+            --dir release_asset
+
+          test -f "release_asset/$ASSET_NAME"
+          ls -lh "release_asset/$ASSET_NAME"
+
+      - name: Publish to Chrome Web Store
+        uses: browser-actions/release-chrome-extension@v0.2.1
+        with:
+          extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
+          extension-path: release_asset/${{ inputs.asset_name }}
+          oauth-client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          oauth-client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
+          oauth-refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
+
+      - name: Publish summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TAG=$(gh release view --json tagName --jq '.tagName')
+          echo "Published latest GitHub release: $TAG"
