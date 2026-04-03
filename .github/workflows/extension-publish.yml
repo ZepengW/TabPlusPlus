@@ -1,35 +1,31 @@
-name: Build & Preview Chrome Extension
+name: Build & Publish Chrome Extension
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install dependencies if needed
+      - name: Install dependencies
         run: |
           if [ -f package.json ]; then
             npm install
             npm run build || true
           fi
 
-      - name: Zip extension
+      - name: Pack extension into ZIP
         run: |
           DIR="dist"
-          if [ ! -d "$DIR" ]; then
-            DIR="."
-          fi
+          [ -d "$DIR" ] || DIR="."
           zip -r extension.zip "$DIR" \
             -x "*.git*" "node_modules/*" ".github/*" "*.md"
 
-      - name: Upload extension zip
+      - name: Upload extension
         uses: actions/upload-artifact@v4
         with:
           name: extension
@@ -40,8 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: publish
     steps:
-      - name: Download built extension
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: extension
 
@@ -50,5 +45,6 @@ jobs:
         with:
           extension-id: ${{ secrets.CHROME_EXTENSION_ID }}
           client-id: ${{ secrets.CHROME_CLIENT_ID }}
+          client-secret: ${{ secrets.CHROME_CLIENT_SECRET }} # 这行你之前缺了！
           refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
           zip-path: extension.zip
