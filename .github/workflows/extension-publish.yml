@@ -50,12 +50,7 @@ jobs:
 
           echo "manifest_file=$FILE" >> "$GITHUB_OUTPUT"
 
-          NEW_VERSION=$(python3 - <<PY
-import json
-with open("$FILE", "r", encoding="utf-8") as f:
-    print(json.load(f).get("version", ""))
-PY
-)
+          NEW_VERSION=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1], encoding="utf-8")).get("version",""))' "$FILE")
 
           if git cat-file -e HEAD^:"$FILE" 2>/dev/null; then
             OLD_VERSION=$(git show HEAD^:"$FILE" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("version",""))')
@@ -226,12 +221,6 @@ PY
               --title "$TAG" \
               --generate-notes
           fi
-
-      # 可选增强：后续你要接入 Copilot 自动整理 git log，
-      # 可以在这里先生成 release_notes.md，再改成：
-      # gh release create "$TAG" extension.zip --title "$TAG" --notes-file release_notes.md
-      #
-      # 当前先用 GitHub 原生自动生成 notes，更稳。
 
       - name: Release summary
         shell: bash
