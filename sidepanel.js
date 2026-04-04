@@ -18,6 +18,7 @@ const DEFAULT_SETTINGS = {
 };
 
 const OPEN_ALL_CONFIRM_THRESHOLD = 10;
+const SESSION_PREVIEW_TABS = 3;
 
 // ─── Tab Group Color Map ──────────────────────────────────────────────────────
 const GROUP_COLORS = {
@@ -182,6 +183,11 @@ async function init() {
     applyPreferencesToUI();
     await loadBookmarks();
     await loadBookmarkCount();
+  } else if (state.view === 'sessions') {
+    applyPreferencesToUI();
+    await loadSessionsView();
+    await loadTabs();
+    await loadBookmarkCount();
   } else {
     applyPreferencesToUI();
     await loadTabs();
@@ -197,9 +203,11 @@ function switchView(view) {
   );
   $('viewTabs').classList.toggle('hidden', view !== 'tabs');
   $('viewBookmarks').classList.toggle('hidden', view !== 'bookmarks');
+  $('viewSessions').classList.toggle('hidden', view !== 'sessions');
 
   persistPreferences();
   if (view === 'bookmarks') loadBookmarks();
+  if (view === 'sessions') loadSessionsView();
 }
 
 // ─── Tab Management ──────────────────────────────────────────────────────────
@@ -954,6 +962,74 @@ async function saveSession() {
   if (sessions.length > 10) sessions.length = 10;
   await chrome.storage.local.set({ sessions });
   showToast(t('toast_session_saved', tabs.length), 'success');
+  if (state.view === 'sessions') loadSessionsView();
+}
+
+async function loadSessionsView() {
+  const { sessions = [] } = await chrome.storage.local.get('sessions');
+  const container = $('sessionList');
+  container.innerHTML = '';
+
+  if (sessions.length === 0) {
+    const empty = document.createElement('p');
+    empty.className = 'session-list-empty';
+    empty.textContent = t('session_list_empty');
+    container.appendChild(empty);
+    return;
+  }
+
+  const frag = document.createDocumentFragment();
+  sessions.forEach((session) => {
+    const item = document.createElement('div');
+    item.className = 'session-item';
+
+    const meta = document.createElement('div');
+    meta.className = 'session-meta';
+
+    const dateEl = document.createElement('div');
+    dateEl.className = 'session-date';
+    dateEl.textContent = session.date;
+
+    const tabsEl = document.createElement('div');
+    tabsEl.className = 'session-tabs-label';
+    const previewTitles = session.tabs.slice(0, SESSION_PREVIEW_TABS).map((tab) => tab.title || tab.url).join(', ');
+    tabsEl.textContent = `${t('session_tabs_label', session.tabs.length)}: ${previewTitles}`;
+    tabsEl.title = session.tabs.map((tab) => tab.title || tab.url).join('\n');
+
+    meta.append(dateEl, tabsEl);
+
+    const actions = document.createElement('div');
+    actions.className = 'session-actions';
+
+    const restoreBtn = document.createElement('button');
+    restoreBtn.className = 'session-btn';
+    restoreBtn.textContent = t('session_restore_btn');
+    restoreBtn.addEventListener('click', () => restoreSessionFromPanel(session));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'session-btn danger';
+    deleteBtn.textContent = t('session_delete_btn');
+    deleteBtn.addEventListener('click', () => deleteSessionFromPanel(session.id));
+
+    actions.append(restoreBtn, deleteBtn);
+    item.append(meta, actions);
+    frag.appendChild(item);
+  });
+
+  container.appendChild(frag);
+}
+
+async function restoreSessionFromPanel(session) {
+  await Promise.all(session.tabs.map(({ url }) => chrome.tabs.create({ url, active: false })));
+  showToast(t('toast_session_restored', session.tabs.length), 'success');
+}
+
+async function deleteSessionFromPanel(sessionId) {
+  const { sessions = [] } = await chrome.storage.local.get('sessions');
+  const updated = sessions.filter((s) => s.id !== sessionId);
+  await chrome.storage.local.set({ sessions: updated });
+  showToast(t('toast_session_deleted'), 'success');
+  loadSessionsView();
 }
 
 function updateToolbarState() {
@@ -1732,6 +1808,7 @@ function applyPreferencesToUI() {
   );
   $('viewTabs').classList.toggle('hidden', state.view !== 'tabs');
   $('viewBookmarks').classList.toggle('hidden', state.view !== 'bookmarks');
+  $('viewSessions').classList.toggle('hidden', state.view !== 'sessions');
 }
 
 async function persistPreferences() {
@@ -1848,6 +1925,7 @@ function onBackgroundMessage(message) {
       break;
     case 'SESSION_SAVED':
       showToast(t('toast_session_saved', message.count), 'success');
+      if (state.view === 'sessions') loadSessionsView();
       break;
   }
 }

@@ -28,6 +28,14 @@
       <span data-i18n="nav_bookmarks">Bookmarks</span>
       <span class="nav-badge" id="bookmarkCountBadge">0</span>
     </button>
+    <button class="nav-tab" data-view="sessions" id="navSessions">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+        <polyline points="17 21 17 13 7 13 7 21"/>
+        <polyline points="7 3 7 8 15 8"/>
+      </svg>
+      <span data-i18n="nav_sessions">Sessions</span>
+    </button>
     <button class="nav-settings-btn" id="btnSettings" data-i18n-title="btn_settings_title" title="Settings" aria-label="Settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <circle cx="12" cy="12" r="3"/>
@@ -119,6 +127,13 @@
         </svg>
         <span data-i18n="btn_save_session">Save</span>
       </button>
+    </div>
+  </div>
+
+  <!-- Sessions View -->
+  <div class="view hidden" id="viewSessions">
+    <div class="session-list" id="sessionList">
+      <p class="session-list-empty" data-i18n="session_list_empty">No saved sessions yet.</p>
     </div>
   </div>
 
