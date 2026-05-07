@@ -403,6 +403,7 @@ body {
 .tab-btn.close:hover { background: var(--danger-light); color: var(--danger); }
 .tab-btn.pinned-active { color: var(--warning); }
 .tab-btn.muted-active { color: var(--text-muted); }
+.tab-btn.audible-active { color: #1e40af; }
 
 /* Active indicator bar */
 .tab-item.active::before {
