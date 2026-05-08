@@ -15,7 +15,7 @@ const TAB_MENU_IDS = {
   reopenClosed: 'tabReopenClosed',
 };
 
-function msg(key, fallback) {
+function getLocalizedMessage(key, fallback) {
   return chrome.i18n.getMessage(key) || fallback;
 }
 
@@ -43,43 +43,43 @@ chrome.runtime.onInstalled.addListener(() => {
   });
   chrome.contextMenus.create({
     id: TAB_MENU_IDS.root,
-    title: msg('ctx_tab_actions_root', 'TabPlusPlus Tab Actions'),
+    title: getLocalizedMessage('ctx_tab_actions_root', 'TabPlusPlus Tab Actions'),
     contexts: ['tab'],
   });
   chrome.contextMenus.create({
     id: TAB_MENU_IDS.closeCurrent,
     parentId: TAB_MENU_IDS.root,
-    title: msg('ctx_tab_close_current', 'Close Current Tab'),
+    title: getLocalizedMessage('ctx_tab_close_current', 'Close Current Tab'),
     contexts: ['tab'],
   });
   chrome.contextMenus.create({
     id: TAB_MENU_IDS.closeGroupOthers,
     parentId: TAB_MENU_IDS.root,
-    title: msg('ctx_tab_close_group_others', 'Close Other Tabs in Group'),
+    title: getLocalizedMessage('ctx_tab_close_group_others', 'Close Other Tabs in Group'),
     contexts: ['tab'],
   });
   chrome.contextMenus.create({
     id: TAB_MENU_IDS.closeWindowOthers,
     parentId: TAB_MENU_IDS.root,
-    title: msg('ctx_tab_close_window_others', 'Close Other Tabs in This Window'),
+    title: getLocalizedMessage('ctx_tab_close_window_others', 'Close Other Tabs in This Window'),
     contexts: ['tab'],
   });
   chrome.contextMenus.create({
     id: TAB_MENU_IDS.closeOthers,
     parentId: TAB_MENU_IDS.root,
-    title: msg('ctx_tab_close_others', 'Close Other Tabs'),
+    title: getLocalizedMessage('ctx_tab_close_others', 'Close Other Tabs'),
     contexts: ['tab'],
   });
   chrome.contextMenus.create({
     id: TAB_MENU_IDS.closeRight,
     parentId: TAB_MENU_IDS.root,
-    title: msg('ctx_tab_close_right', 'Close Tabs to the Right'),
+    title: getLocalizedMessage('ctx_tab_close_right', 'Close Tabs to the Right'),
     contexts: ['tab'],
   });
   chrome.contextMenus.create({
     id: TAB_MENU_IDS.reopenClosed,
     parentId: TAB_MENU_IDS.root,
-    title: msg('ctx_tab_reopen_closed', 'Reopen Last Closed Tab'),
+    title: getLocalizedMessage('ctx_tab_reopen_closed', 'Reopen Last Closed Tab'),
     contexts: ['tab'],
   });
 });
@@ -182,7 +182,22 @@ async function handleTabMenuClick(info, fallbackTab) {
 
   if (info.menuItemId === TAB_MENU_IDS.closeOthers) {
     const allTabs = await chrome.tabs.query({});
-    const toClose = allTabs.map((t) => t.id).filter((id) => id !== currentTab.id);
+    const tabsByWindow = new Map();
+    allTabs.forEach((t) => {
+      if (!tabsByWindow.has(t.windowId)) tabsByWindow.set(t.windowId, []);
+      tabsByWindow.get(t.windowId).push(t);
+    });
+
+    const toClose = [];
+    tabsByWindow.forEach((windowTabs, windowId) => {
+      if (windowId === currentTab.windowId) {
+        toClose.push(...windowTabs.map((t) => t.id).filter((id) => id !== currentTab.id));
+        return;
+      }
+      if (windowTabs.length <= 1) return;
+      const keepTab = windowTabs.find((t) => t.active) || windowTabs.find((t) => t.pinned) || windowTabs[0];
+      toClose.push(...windowTabs.map((t) => t.id).filter((id) => id !== keepTab.id));
+    });
     if (toClose.length) await chrome.tabs.remove(toClose).catch(() => {});
     return true;
   }
