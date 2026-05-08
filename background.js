@@ -171,8 +171,7 @@ function isSignificantUpdate(changeInfo) {
 
   const keys = ['title', 'url', 'favIconUrl', 'pinned', 'audible', 'mutedInfo', 'groupId'];
   if (keys.some((k) => k in changeInfo)) return true;
-  if (!hasStatus) return false;
-  return true;
+  return hasStatus;
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
