@@ -675,6 +675,7 @@ function createTabItem(tab) {
   item.dataset.tabId = tab.id;
   if (tab.active && tab.windowId === state.currentWindowId) item.classList.add('active');
   if (state.selectedTabs.has(tab.id)) item.classList.add('selected');
+  if (tab.audible) item.classList.add('audible');
 
   // Drag & drop
   item.draggable = true;
