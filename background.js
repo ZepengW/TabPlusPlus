@@ -163,8 +163,11 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 });
 
 function isSignificantUpdate(changeInfo) {
+  // Ignore noisy intermediate loading updates to avoid panel re-render flicker.
+  if (changeInfo.status && changeInfo.status !== 'complete') return false;
+
   const keys = ['title', 'url', 'favIconUrl', 'pinned', 'audible', 'mutedInfo', 'groupId'];
-  return keys.some((k) => k in changeInfo);
+  return keys.some((k) => k in changeInfo) || changeInfo.status === 'complete';
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
