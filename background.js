@@ -163,13 +163,16 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 });
 
 function isSignificantUpdate(changeInfo) {
-  // Ignore intermediate tab lifecycle updates to avoid noisy panel re-renders.
-  // Keep only final/complete status transitions.
-  if ('status' in changeInfo && changeInfo.status !== 'complete') return false;
+  // status is handled separately from other keys:
+  // - ignore intermediate status transitions (e.g. loading)
+  // - allow final complete transition to refresh once
+  const hasStatus = Object.prototype.hasOwnProperty.call(changeInfo, 'status');
+  if (hasStatus && changeInfo.status !== 'complete') return false;
 
   const keys = ['title', 'url', 'favIconUrl', 'pinned', 'audible', 'mutedInfo', 'groupId'];
   if (keys.some((k) => k in changeInfo)) return true;
-  return changeInfo.status === 'complete';
+  if (!hasStatus) return false;
+  return true;
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
