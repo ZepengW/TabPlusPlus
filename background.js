@@ -163,8 +163,8 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 });
 
 function isSignificantUpdate(changeInfo) {
-  const keys = ['status', 'title', 'favIconUrl', 'pinned', 'audible', 'mutedInfo'];
-  return keys.some((k) => k in changeInfo) && changeInfo.status !== 'loading';
+  const keys = ['title', 'url', 'favIconUrl', 'pinned', 'audible', 'mutedInfo', 'groupId'];
+  return keys.some((k) => k in changeInfo);
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
