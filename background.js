@@ -199,6 +199,7 @@ async function handleTabMenuClick(info, fallbackTab) {
         return;
       }
       if (windowTabs.length <= 1) return;
+      // Keep priority: active tab > pinned tab > first tab, to avoid closing entire windows.
       let keepTab = windowTabs[0];
       for (const t of windowTabs) {
         if (t.active) {
@@ -232,12 +233,12 @@ async function handleTabMenuClick(info, fallbackTab) {
 
 async function getCurrentContextTab(info, fallbackTab) {
   if (typeof info.tabId === 'number') {
-    const byInfo = await chrome.tabs.get(info.tabId).catch(() => null);
-    if (byInfo) return byInfo;
+    const tabFromInfo = await chrome.tabs.get(info.tabId).catch(() => null);
+    if (tabFromInfo) return tabFromInfo;
   }
   if (fallbackTab?.id) {
-    const byFallback = await chrome.tabs.get(fallbackTab.id).catch(() => null);
-    if (byFallback) return byFallback;
+    const tabFromFallback = await chrome.tabs.get(fallbackTab.id).catch(() => null);
+    if (tabFromFallback) return tabFromFallback;
   }
   return null;
 }
