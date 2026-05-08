@@ -19,6 +19,9 @@ const DEFAULT_SETTINGS = {
 
 const OPEN_ALL_CONFIRM_THRESHOLD = 10;
 const SESSION_PREVIEW_TABS = 3;
+// Delay (ms) before reloading tabs after detecting a service worker restart,
+// giving the SW enough time to fully initialise before we query tabs.
+const SW_RESTART_RELOAD_DELAY_MS = 500;
 
 // ─── Tab Group Color Map ──────────────────────────────────────────────────────
 const GROUP_COLORS = {
@@ -177,6 +180,16 @@ async function init() {
   window.addEventListener('unload', () => {
     chrome.storage.session.set({ sidePanelOpen: false }).catch(() => {});
   });
+
+  // Reload tabs whenever the panel becomes visible (e.g. after being hidden)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && state.view === 'tabs') loadTabs();
+  });
+
+  // Connect to the background service worker via a long-lived port.
+  // When the service worker restarts (after being idle), the port disconnects
+  // and we can detect this to trigger a refresh, preventing a stale/empty panel.
+  connectToBackground();
 
   // Start in saved view
   if (state.view === 'bookmarks') {
@@ -699,8 +712,6 @@ function createTabItem(tab) {
   const badges = document.createElement('div');
   badges.className = 'tab-badges';
   if (tab.pinned) badges.appendChild(makeBadge('📌', 'pinned'));
-  if (tab.audible) badges.appendChild(makeBadge('🔊', 'audible'));
-  if (tab.mutedInfo?.muted) badges.appendChild(makeBadge('🔇', 'muted'));
 
   // Actions
   const actions = document.createElement('div');
@@ -713,10 +724,17 @@ function createTabItem(tab) {
   );
   pinBtn.addEventListener('click', (e) => { e.stopPropagation(); togglePin(tab); });
 
+  // Single icon for all three states: audible (playing), muted, or silent.
+  // audible-active  = tab is playing sound  → click to mute
+  // muted-active    = tab is muted          → click to unmute
+  // (no extra class)= tab is silent         → click to mute
+  let muteBtnClass = '';
+  if (tab.mutedInfo?.muted) muteBtnClass = 'muted-active';
+  else if (tab.audible)     muteBtnClass = 'audible-active';
   const muteBtn = makeTabBtn(
     tab.mutedInfo?.muted ? unMuteSvg() : muteSvg(),
     tab.mutedInfo?.muted ? t('tab_unmute') : t('tab_mute'),
-    tab.mutedInfo?.muted ? 'muted-active' : ''
+    muteBtnClass
   );
   muteBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleMute(tab); });
 
@@ -1890,6 +1908,26 @@ function ctxDelete(e) {
   const t = state.contextTarget;
   if (!t) return;
   if (t.type === 'bookmark') deleteBookmark(t.node);
+}
+
+// ─── Service Worker Keep-alive / Reconnect ────────────────────────────────────
+// When the MV3 service worker is idle it gets terminated by the browser.
+// The long-lived port lets us detect that restart and immediately reload the
+// tab list, so the panel never stays empty after a service-worker wake-up.
+function connectToBackground() {
+  let port;
+  try {
+    port = chrome.runtime.connect({ name: 'sidepanel-keepalive' });
+  } catch {
+    return;
+  }
+  port.onDisconnect.addListener(() => {
+    // Small delay to let the service worker fully restart before querying tabs.
+    setTimeout(() => {
+      if (state.view === 'tabs') loadTabs();
+      connectToBackground();
+    }, SW_RESTART_RELOAD_DELAY_MS);
+  });
 }
 
 // ─── Background Messages ─────────────────────────────────────────────────────
