@@ -164,8 +164,8 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 
 function isSignificantUpdate(changeInfo) {
   // status is handled separately from other keys:
-  // - ignore intermediate status transitions (e.g. loading)
-  // - allow final complete transition to refresh once
+  // - ignore all non-complete status transitions (e.g. loading/unloaded)
+  // - treat a standalone complete transition as significant to refresh once
   const hasStatus = Object.prototype.hasOwnProperty.call(changeInfo, 'status');
   if (hasStatus && changeInfo.status !== 'complete') return false;
 
