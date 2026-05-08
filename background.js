@@ -184,8 +184,12 @@ async function handleTabMenuClick(info, fallbackTab) {
     const allTabs = await chrome.tabs.query({});
     const tabsByWindow = new Map();
     allTabs.forEach((t) => {
-      if (!tabsByWindow.has(t.windowId)) tabsByWindow.set(t.windowId, []);
-      tabsByWindow.get(t.windowId).push(t);
+      let windowTabs = tabsByWindow.get(t.windowId);
+      if (!windowTabs) {
+        windowTabs = [];
+        tabsByWindow.set(t.windowId, windowTabs);
+      }
+      windowTabs.push(t);
     });
 
     const toClose = [];
@@ -195,7 +199,14 @@ async function handleTabMenuClick(info, fallbackTab) {
         return;
       }
       if (windowTabs.length <= 1) return;
-      const keepTab = windowTabs.find((t) => t.active) || windowTabs.find((t) => t.pinned) || windowTabs[0];
+      let keepTab = windowTabs[0];
+      for (const t of windowTabs) {
+        if (t.active) {
+          keepTab = t;
+          break;
+        }
+        if (t.pinned && !keepTab.pinned) keepTab = t;
+      }
       toClose.push(...windowTabs.map((t) => t.id).filter((id) => id !== keepTab.id));
     });
     if (toClose.length) await chrome.tabs.remove(toClose).catch(() => {});
