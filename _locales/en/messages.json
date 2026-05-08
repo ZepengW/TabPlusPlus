@@ -165,6 +165,14 @@
   "popup_session_saved":  { "message": "Session saved ({1} tabs)" },
   "popup_restored":       { "message": "Restored {1} tabs" },
 
+  "ctx_tab_actions_root":         { "message": "TabPlusPlus Tab Actions" },
+  "ctx_tab_close_current":        { "message": "Close Current Tab" },
+  "ctx_tab_close_group_others":   { "message": "Close Other Tabs in Group" },
+  "ctx_tab_close_window_others":  { "message": "Close Other Tabs in This Window" },
+  "ctx_tab_close_others":         { "message": "Close Other Tabs" },
+  "ctx_tab_close_right":          { "message": "Close Tabs to the Right" },
+  "ctx_tab_reopen_closed":        { "message": "Reopen Last Closed Tab" },
+
   "session_list_empty":    { "message": "No saved sessions yet." },
   "session_restore_btn":   { "message": "Restore" },
   "session_delete_btn":    { "message": "Delete" },

@@ -32,6 +32,7 @@
 - **Group by domain** — visually cluster related tabs together at a glance
 - **Bulk actions** — select multiple tabs then close or group them in one click
 - **Real-time sync** — the panel updates automatically as you open, close, and navigate tabs
+- **Tab right-click actions** — quickly close current tab, group/window/global others, close right-side tabs, or reopen the last closed tab from the browser tab context menu
 
 ### 🔖 Bookmark Management — Your Library, Always at Hand
 - **Full-text search** across all bookmarks instantly
@@ -108,6 +109,7 @@ TabPlusPlus works **entirely locally**. It does not collect, transmit, or share 
 |---|---|
 | Open / close side panel | Click the **T+** toolbar icon |
 | Search tabs | Type in the search box in the Tabs view |
+| Use tab right-click shortcuts | Right-click a browser tab → **TabPlusPlus Tab Actions** |
 | Filter tabs | Click a filter pill (All / Current Window / Audible / Pinned / Duplicates) |
 | Sort tabs | Use the sort dropdown (Recent / Title / Domain) |
 | Group by domain | Click the **Group** toggle button |
@@ -155,6 +157,7 @@ MIT © [ZepengW](https://github.com/ZepengW)
 - **按域名分组** — 一键将同域名标签聚合显示
 - **批量操作** — 多选标签后一键关闭或分组
 - **实时同步** — 打开、关闭或切换标签时面板自动更新
+- **标签页右键快捷操作** — 在浏览器标签页右键菜单中快速关闭当前页、关闭组内/窗口内/全局其他页、关闭右侧页或恢复刚关闭页
 
 ### 🔖 书签管理 — 随时触手可及的知识库
 - **全文即时搜索** 所有书签
@@ -231,6 +234,7 @@ TabPlusPlus **完全在本地运行**，不收集、传输或共享任何用户�
 |---|---|
 | 打开 / 关闭侧边栏 | 点击 **T+** 工具栏图标 |
 | 搜索标签页 | 在标签页视图的搜索框中输入 |
+| 使用标签页右键快捷操作 | 右键浏览器标签页 → **TabPlusPlus 标签页快捷操作** |
 | 过滤标签页 | 点击过滤按钮（全部 / 当前窗口 / 音频 / 已固定 / 重复） |
 | 排序标签页 | 使用排序下拉菜单 |
 | 按域名分组 | 点击 **Group** 切换按钮 |
