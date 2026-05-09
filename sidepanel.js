@@ -266,17 +266,21 @@ async function loadTabs(options = {}) {
     tabLoadInFlight = false;
     if (pendingSilentTabReload) {
       pendingSilentTabReload = false;
-      loadTabs({ showSkeleton: false }).catch(() => {});
+      loadTabs({ showSkeleton: false }).catch((err) => {
+        console.debug('TabPlusPlus: silent tab reload failed', err);
+      });
     }
   }
 }
 
 function scheduleTabRefresh() {
-  if (tabRefreshTimer !== null) return;
+  if (tabRefreshTimer !== null) clearTimeout(tabRefreshTimer);
   tabRefreshTimer = setTimeout(() => {
     tabRefreshTimer = null;
     if (state.view === 'tabs') {
-      loadTabs({ showSkeleton: false }).catch(() => {});
+      loadTabs({ showSkeleton: false }).catch((err) => {
+        console.debug('TabPlusPlus: scheduled tab refresh failed', err);
+      });
     }
   }, TAB_EVENT_REFRESH_DEBOUNCE_MS);
 }
