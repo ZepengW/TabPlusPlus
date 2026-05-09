@@ -315,15 +315,10 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 });
 
 function isSignificantUpdate(changeInfo) {
-  // status is handled separately from other keys:
-  // - ignore all non-complete status transitions (e.g. loading/unloaded)
-  // - treat a standalone complete transition as significant to refresh once
-  const hasStatus = Object.prototype.hasOwnProperty.call(changeInfo, 'status');
-  if (hasStatus && changeInfo.status !== 'complete') return false;
-
+  // Ignore status-only transitions; the panel should react to actual visible
+  // tab metadata/state changes to avoid high-frequency refresh churn.
   const keys = ['title', 'url', 'favIconUrl', 'pinned', 'audible', 'mutedInfo', 'groupId'];
-  if (keys.some((k) => k in changeInfo)) return true;
-  return hasStatus;
+  return keys.some((k) => k in changeInfo);
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
