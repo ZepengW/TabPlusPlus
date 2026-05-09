@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
 
 const OPEN_ALL_CONFIRM_THRESHOLD = 10;
 const SESSION_PREVIEW_TABS = 3;
+const TAB_GROUP_NONE_ID = -1;
 // Delay (ms) before reloading tabs after detecting a service worker restart,
 // giving the SW enough time to fully initialise before we query tabs.
 const SW_RESTART_RELOAD_DELAY_MS = 500;
@@ -64,7 +65,7 @@ const state = {
   recentBookmarks: [],    // recently accessed bookmarks [{id,title,url}]
   settings: { ...DEFAULT_SETTINGS },
 
-  contextTarget: null,    // { type: 'bookmark', node } | { type: 'tab', tab }
+  contextTarget: null,    // { type: 'bookmark', node } | { type: 'tab', tabId }
 };
 
 // ─── DOM Refs ────────────────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ const bkSearchClear  = $('bookmarkSearchClear');
 const tabCountBadge  = $('tabCountBadge');
 const bkCountBadge   = $('bookmarkCountBadge');
 const contextMenu    = $('contextMenu');
+const tabContextMenu = $('tabContextMenu');
 const toastContainer = $('toastContainer');
 const editModal      = $('editModal');
 const breadcrumb     = $('breadcrumb');
@@ -141,7 +143,16 @@ async function init() {
   $('ctxOpenAll').addEventListener('click', ctxOpenAll);
   $('ctxEdit').addEventListener('click', ctxEdit);
   $('ctxDelete').addEventListener('click', ctxDelete);
-  document.addEventListener('click', hideContextMenu);
+  $('ctxTabCloseCurrent').addEventListener('click', ctxTabCloseCurrent);
+  $('ctxTabCloseGroupOthers').addEventListener('click', ctxTabCloseGroupOthers);
+  $('ctxTabCloseWindowOthers').addEventListener('click', ctxTabCloseWindowOthers);
+  $('ctxTabCloseOthers').addEventListener('click', ctxTabCloseOthers);
+  $('ctxTabCloseRight').addEventListener('click', ctxTabCloseRight);
+  $('ctxTabReopenClosed').addEventListener('click', ctxTabReopenClosed);
+  document.addEventListener('click', () => {
+    hideContextMenu();
+    hideTabContextMenu();
+  });
   document.addEventListener('keydown', onKeyDown);
 
   // Edit modal
@@ -750,6 +761,13 @@ function createTabItem(tab) {
     if (e.target === checkbox) return;
     chrome.tabs.update(tab.id, { active: true });
     chrome.windows.update(tab.windowId, { focused: true });
+  });
+
+  item.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    state.contextTarget = { type: 'tab', tabId: tab.id };
+    showTabContextMenu(e.clientX, e.clientY, tab);
   });
 
   return item;
@@ -1861,7 +1879,8 @@ function onSettingsChanged() {
 
 // ─── Context Menu ────────────────────────────────────────────────────────────
 function showContextMenu(x, y, isBookmarkUrl = false) {
-  // isBookmarkUrl: true = bookmark link; false = folder or tab
+  // isBookmarkUrl: true = bookmark link; false = bookmark folder
+  hideTabContextMenu();
   $('ctxOpen').style.display = isBookmarkUrl ? '' : 'none';
   $('ctxOpenAll').style.display = (!isBookmarkUrl && state.contextTarget?.type === 'bookmark') ? '' : 'none';
   $('ctxEdit').style.display = isBookmarkUrl ? '' : 'none';
@@ -1877,6 +1896,7 @@ function showContextMenu(x, y, isBookmarkUrl = false) {
 }
 
 function hideContextMenu() { contextMenu.classList.add('hidden'); }
+function hideTabContextMenu() { tabContextMenu.classList.add('hidden'); }
 
 function ctxOpen(e) {
   e.stopPropagation();
@@ -1909,6 +1929,124 @@ function ctxDelete(e) {
   const t = state.contextTarget;
   if (!t) return;
   if (t.type === 'bookmark') deleteBookmark(t.node);
+}
+
+function showTabContextMenu(x, y, tab) {
+  hideContextMenu();
+
+  const hasGroup = hasTabGroup(tab);
+  const hasRightTabs = state.tabs.some((t) => t.windowId === tab.windowId && t.index > tab.index);
+  $('ctxTabCloseGroupOthers').style.display = hasGroup ? '' : 'none';
+  $('ctxTabCloseRight').style.display = hasRightTabs ? '' : 'none';
+
+  tabContextMenu.style.left = x + 'px';
+  tabContextMenu.style.top = y + 'px';
+  tabContextMenu.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    const rect = tabContextMenu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) tabContextMenu.style.left = (x - rect.width) + 'px';
+    if (rect.bottom > window.innerHeight) tabContextMenu.style.top = (y - rect.height) + 'px';
+  });
+}
+
+function getContextTab() {
+  const target = state.contextTarget;
+  if (!target || target.type !== 'tab') return null;
+  return state.tabs.find((tab) => tab.id === target.tabId) || null;
+}
+
+function hasTabGroup(tab) {
+  return typeof tab?.groupId === 'number' && tab.groupId !== TAB_GROUP_NONE_ID;
+}
+
+async function ctxTabCloseCurrent(e) {
+  e.stopPropagation();
+  hideTabContextMenu();
+  const tab = getContextTab();
+  if (!tab) return;
+  await closeTab(tab.id);
+}
+
+async function ctxTabCloseGroupOthers(e) {
+  e.stopPropagation();
+  hideTabContextMenu();
+  const tab = getContextTab();
+  if (!hasTabGroup(tab)) return;
+  const tabsInGroup = await chrome.tabs.query({ windowId: tab.windowId, groupId: tab.groupId });
+  const toClose = tabsInGroup.map((t) => t.id).filter((id) => id !== tab.id);
+  if (!toClose.length) return;
+  await chrome.tabs.remove(toClose);
+  await loadTabs();
+}
+
+async function ctxTabCloseWindowOthers(e) {
+  e.stopPropagation();
+  hideTabContextMenu();
+  const tab = getContextTab();
+  if (!tab) return;
+  const windowTabs = await chrome.tabs.query({ windowId: tab.windowId });
+  const toClose = windowTabs.map((t) => t.id).filter((id) => id !== tab.id);
+  if (!toClose.length) return;
+  await chrome.tabs.remove(toClose);
+  await loadTabs();
+}
+
+async function ctxTabCloseOthers(e) {
+  e.stopPropagation();
+  hideTabContextMenu();
+  const tab = getContextTab();
+  if (!tab) return;
+  const allTabs = await chrome.tabs.query({});
+  const tabsByWindow = new Map();
+  allTabs.forEach((t) => {
+    let windowTabs = tabsByWindow.get(t.windowId);
+    if (!windowTabs) {
+      windowTabs = [];
+      tabsByWindow.set(t.windowId, windowTabs);
+    }
+    windowTabs.push(t);
+  });
+
+  const toClose = [];
+  tabsByWindow.forEach((windowTabs, windowId) => {
+    if (windowId === tab.windowId) {
+      toClose.push(...windowTabs.map((t) => t.id).filter((id) => id !== tab.id));
+      return;
+    }
+    if (windowTabs.length <= 1) return;
+    let keepTab = windowTabs[0];
+    for (const t of windowTabs) {
+      if (t.active) {
+        keepTab = t;
+        break;
+      }
+      if (t.pinned && !keepTab.pinned) keepTab = t;
+    }
+    toClose.push(...windowTabs.map((t) => t.id).filter((id) => id !== keepTab.id));
+  });
+
+  if (!toClose.length) return;
+  await chrome.tabs.remove(toClose);
+  await loadTabs();
+}
+
+async function ctxTabCloseRight(e) {
+  e.stopPropagation();
+  hideTabContextMenu();
+  const tab = getContextTab();
+  if (!tab) return;
+  const windowTabs = await chrome.tabs.query({ windowId: tab.windowId });
+  const toClose = windowTabs.filter((t) => t.index > tab.index).map((t) => t.id);
+  if (!toClose.length) return;
+  await chrome.tabs.remove(toClose);
+  await loadTabs();
+}
+
+async function ctxTabReopenClosed(e) {
+  e.stopPropagation();
+  hideTabContextMenu();
+  await chrome.sessions.restore().catch(() => {});
+  await loadTabs();
 }
 
 // ─── Service Worker Keep-alive / Reconnect ────────────────────────────────────
@@ -1982,6 +2120,7 @@ function refreshActiveState(activeInfo) {
 function onKeyDown(e) {
   if (e.key === 'Escape') {
     if (!editModal.classList.contains('hidden')) { closeEditModal(); return; }
+    if (!tabContextMenu.classList.contains('hidden')) { hideTabContextMenu(); return; }
     if (!contextMenu.classList.contains('hidden')) { hideContextMenu(); return; }
     if (state.view === 'tabs' && tabSearch.value) { tabSearch.value = ''; onTabSearchInput(); return; }
     if (state.view === 'bookmarks' && bkSearch.value) { bkSearch.value = ''; onBkSearchInput(); }

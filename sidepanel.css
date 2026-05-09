@@ -41,7 +41,8 @@
   --audible-btn-bg: rgba(59, 130, 246, .16);
   --audible-btn-color: #2563eb;
 
-  --transition: 0.18s ease;
+  --transition-duration: 0.18s;
+  --transition: var(--transition-duration) ease;
   --scrollbar-thumb: #c7cde8;
   --scrollbar-track: transparent;
 
@@ -326,7 +327,7 @@ body {
   padding: 7px 8px; border-radius: var(--radius-md);
   cursor: pointer; background: var(--bg-card);
   border: 1.5px solid transparent;
-  transition: all var(--transition);
+  transition: background-color var(--transition), border-color var(--transition), box-shadow var(--transition);
   position: relative;
   user-select: none;
 }
@@ -397,12 +398,21 @@ body {
 
 .tab-actions {
   display: flex; gap: 2px; align-items: center;
-  opacity: 0; transition: opacity var(--transition); flex-shrink: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity var(--transition), visibility 0s linear var(--transition-duration);
+  flex-shrink: 0;
 }
 
 .tab-item:hover .tab-actions,
-.tab-item.active .tab-actions { opacity: 1; }
-.tab-item.audible .tab-actions { opacity: 1; }
+.tab-item.active .tab-actions,
+.tab-item.audible .tab-actions {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
 
 .tab-btn {
   width: 24px; height: 24px; border: none; background: none; cursor: pointer;
