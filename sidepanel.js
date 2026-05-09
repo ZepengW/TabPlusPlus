@@ -23,6 +23,8 @@ const TAB_GROUP_NONE_ID = -1;
 // Delay (ms) before reloading tabs after detecting a service worker restart,
 // giving the SW enough time to fully initialise before we query tabs.
 const SW_RESTART_RELOAD_DELAY_MS = 500;
+// Coalesce bursty tab/group events to avoid excessive full re-renders.
+const TAB_EVENT_REFRESH_DEBOUNCE_MS = 120;
 
 // ─── Tab Group Color Map ──────────────────────────────────────────────────────
 const GROUP_COLORS = {
@@ -83,6 +85,9 @@ const tabContextMenu = $('tabContextMenu');
 const toastContainer = $('toastContainer');
 const editModal      = $('editModal');
 const breadcrumb     = $('breadcrumb');
+let tabRefreshTimer = null;
+let tabLoadInFlight = false;
+let pendingSilentTabReload = false;
 
 // ─── Initialisation ──────────────────────────────────────────────────────────
 async function init() {
@@ -194,7 +199,7 @@ async function init() {
 
   // Reload tabs whenever the panel becomes visible (e.g. after being hidden)
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && state.view === 'tabs') loadTabs();
+    if (!document.hidden && state.view === 'tabs') loadTabs({ showSkeleton: false });
   });
 
   // Connect to the background service worker via a long-lived port.
@@ -235,21 +240,45 @@ function switchView(view) {
 }
 
 // ─── Tab Management ──────────────────────────────────────────────────────────
-async function loadTabs() {
-  showTabSkeleton(true);
-  const [tabs, tabGroups] = await Promise.all([
-    chrome.tabs.query({}),
-    chrome.tabGroups ? chrome.tabGroups.query({}).catch(() => []) : Promise.resolve([]),
-  ]);
-  state.tabs = tabs;
-  state.tabGroups = tabGroups;
-  // Keep custom order in sync when tabs change externally
-  if (state.tabSort === 'custom' && state.customTabOrder.length > 0) {
-    syncCustomOrder();
+async function loadTabs(options = {}) {
+  const { showSkeleton = state.tabs.length === 0 } = options;
+  if (tabLoadInFlight) {
+    pendingSilentTabReload = true;
+    return;
   }
-  tabCountBadge.textContent = tabs.length;
-  renderTabView();
-  showTabSkeleton(false);
+  tabLoadInFlight = true;
+  if (showSkeleton) showTabSkeleton(true);
+  try {
+    const [tabs, tabGroups] = await Promise.all([
+      chrome.tabs.query({}),
+      chrome.tabGroups ? chrome.tabGroups.query({}).catch(() => []) : Promise.resolve([]),
+    ]);
+    state.tabs = tabs;
+    state.tabGroups = tabGroups;
+    // Keep custom order in sync when tabs change externally
+    if (state.tabSort === 'custom' && state.customTabOrder.length > 0) {
+      syncCustomOrder();
+    }
+    tabCountBadge.textContent = tabs.length;
+    renderTabView();
+  } finally {
+    if (showSkeleton) showTabSkeleton(false);
+    tabLoadInFlight = false;
+    if (pendingSilentTabReload) {
+      pendingSilentTabReload = false;
+      loadTabs({ showSkeleton: false }).catch(() => {});
+    }
+  }
+}
+
+function scheduleTabRefresh() {
+  if (tabRefreshTimer !== null) return;
+  tabRefreshTimer = setTimeout(() => {
+    tabRefreshTimer = null;
+    if (state.view === 'tabs') {
+      loadTabs({ showSkeleton: false }).catch(() => {});
+    }
+  }, TAB_EVENT_REFRESH_DEBOUNCE_MS);
 }
 
 function renderTabView() {
@@ -2063,7 +2092,7 @@ function connectToBackground() {
   port.onDisconnect.addListener(() => {
     // Small delay to let the service worker fully restart before querying tabs.
     setTimeout(() => {
-      if (state.view === 'tabs') loadTabs();
+      if (state.view === 'tabs') loadTabs({ showSkeleton: false });
       connectToBackground();
     }, SW_RESTART_RELOAD_DELAY_MS);
   });
@@ -2076,7 +2105,7 @@ function onBackgroundMessage(message) {
     case 'TAB_REMOVED':
     case 'TAB_UPDATED':
     case 'TAB_MOVED':
-      if (state.view === 'tabs') loadTabs();
+      scheduleTabRefresh();
       break;
     case 'TAB_ACTIVATED':
       if (state.view === 'tabs') refreshActiveState(message.activeInfo);
@@ -2085,14 +2114,14 @@ function onBackgroundMessage(message) {
     case 'TAB_GROUP_UPDATED':
     case 'TAB_GROUP_REMOVED':
     case 'TAB_GROUP_MOVED':
-      if (state.view === 'tabs') loadTabs();
+      scheduleTabRefresh();
       break;
     case 'BOOKMARK_ADDED':
       loadBookmarkCount();
       if (state.view === 'bookmarks') loadBookmarks();
       break;
     case 'DUPLICATES_CLOSED':
-      if (state.view === 'tabs') loadTabs();
+      scheduleTabRefresh();
       showToast(
         message.count === 1
           ? t('toast_dup_closed_one', message.count)
