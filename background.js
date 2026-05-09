@@ -4,6 +4,21 @@
 // openPanelOnActionClick: true lets Chrome handle the open/close toggle natively.
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
 
+const TAB_GROUP_NONE_ID = -1;
+const TAB_MENU_IDS = {
+  root: 'tabActionsRoot',
+  closeCurrent: 'tabCloseCurrent',
+  closeGroupOthers: 'tabCloseGroupOthers',
+  closeWindowOthers: 'tabCloseWindowOthers',
+  closeOthers: 'tabCloseOthers',
+  closeRight: 'tabCloseRight',
+  reopenClosed: 'tabReopenClosed',
+};
+
+function getLocalizedMessage(key, fallback) {
+  return chrome.i18n.getMessage(key) || fallback;
+}
+
 // ─── Context menus ────────────────────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.create({
@@ -26,10 +41,53 @@ chrome.runtime.onInstalled.addListener(() => {
     title: 'Save Current Session',
     contexts: ['all'],
   });
+  chrome.contextMenus.create({
+    id: TAB_MENU_IDS.root,
+    title: getLocalizedMessage('ctx_tab_actions_root', 'TabPlusPlus Tab Actions'),
+    contexts: ['tab'],
+  });
+  chrome.contextMenus.create({
+    id: TAB_MENU_IDS.closeCurrent,
+    parentId: TAB_MENU_IDS.root,
+    title: getLocalizedMessage('ctx_tab_close_current', 'Close Current Tab'),
+    contexts: ['tab'],
+  });
+  chrome.contextMenus.create({
+    id: TAB_MENU_IDS.closeGroupOthers,
+    parentId: TAB_MENU_IDS.root,
+    title: getLocalizedMessage('ctx_tab_close_group_others', 'Close Other Tabs in Group'),
+    contexts: ['tab'],
+  });
+  chrome.contextMenus.create({
+    id: TAB_MENU_IDS.closeWindowOthers,
+    parentId: TAB_MENU_IDS.root,
+    title: getLocalizedMessage('ctx_tab_close_window_others', 'Close Other Tabs in This Window'),
+    contexts: ['tab'],
+  });
+  chrome.contextMenus.create({
+    id: TAB_MENU_IDS.closeOthers,
+    parentId: TAB_MENU_IDS.root,
+    title: getLocalizedMessage('ctx_tab_close_others', 'Close Other Tabs'),
+    contexts: ['tab'],
+  });
+  chrome.contextMenus.create({
+    id: TAB_MENU_IDS.closeRight,
+    parentId: TAB_MENU_IDS.root,
+    title: getLocalizedMessage('ctx_tab_close_right', 'Close Tabs to the Right'),
+    contexts: ['tab'],
+  });
+  chrome.contextMenus.create({
+    id: TAB_MENU_IDS.reopenClosed,
+    parentId: TAB_MENU_IDS.root,
+    title: getLocalizedMessage('ctx_tab_reopen_closed', 'Reopen Last Closed Tab'),
+    contexts: ['tab'],
+  });
 });
 
 // ─── Context menu clicks ──────────────────────────────────────────────────────
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (await handleTabMenuClick(info, tab)) return;
+
   if (info.menuItemId === 'openTabPlusPlus') {
     await chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
   }
@@ -90,6 +148,100 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     notifySidePanel({ type: 'SESSION_SAVED', count: validTabs.length });
   }
 });
+
+async function handleTabMenuClick(info, fallbackTab) {
+  const tabMenuIds = new Set(Object.values(TAB_MENU_IDS));
+  if (!tabMenuIds.has(info.menuItemId)) return false;
+  if (info.menuItemId === TAB_MENU_IDS.root) return true;
+
+  const currentTab = await getCurrentContextTab(info, fallbackTab);
+  if (!currentTab) return true;
+
+  if (info.menuItemId === TAB_MENU_IDS.closeCurrent) {
+    await chrome.tabs.remove(currentTab.id).catch(() => {});
+    return true;
+  }
+
+  if (info.menuItemId === TAB_MENU_IDS.closeGroupOthers) {
+    if (currentTab.groupId === TAB_GROUP_NONE_ID) return true;
+    const tabsInGroup = await chrome.tabs.query({
+      windowId: currentTab.windowId,
+      groupId: currentTab.groupId,
+    });
+    const toClose = tabsInGroup.map((t) => t.id).filter((id) => id !== currentTab.id);
+    if (toClose.length) await chrome.tabs.remove(toClose).catch(() => {});
+    return true;
+  }
+
+  if (info.menuItemId === TAB_MENU_IDS.closeWindowOthers) {
+    const windowTabs = await chrome.tabs.query({ windowId: currentTab.windowId });
+    const toClose = windowTabs.map((t) => t.id).filter((id) => id !== currentTab.id);
+    if (toClose.length) await chrome.tabs.remove(toClose).catch(() => {});
+    return true;
+  }
+
+  if (info.menuItemId === TAB_MENU_IDS.closeOthers) {
+    const allTabs = await chrome.tabs.query({});
+    const tabsByWindow = new Map();
+    allTabs.forEach((t) => {
+      let windowTabs = tabsByWindow.get(t.windowId);
+      if (!windowTabs) {
+        windowTabs = [];
+        tabsByWindow.set(t.windowId, windowTabs);
+      }
+      windowTabs.push(t);
+    });
+
+    const toClose = [];
+    tabsByWindow.forEach((windowTabs, windowId) => {
+      if (windowId === currentTab.windowId) {
+        toClose.push(...windowTabs.map((t) => t.id).filter((id) => id !== currentTab.id));
+        return;
+      }
+      if (windowTabs.length <= 1) return;
+      // Keep priority: active tab > pinned tab > first tab, to avoid closing entire windows.
+      let keepTab = windowTabs[0];
+      for (const t of windowTabs) {
+        if (t.active) {
+          keepTab = t;
+          break;
+        }
+        if (t.pinned && !keepTab.pinned) keepTab = t;
+      }
+      toClose.push(...windowTabs.map((t) => t.id).filter((id) => id !== keepTab.id));
+    });
+    if (toClose.length) await chrome.tabs.remove(toClose).catch(() => {});
+    return true;
+  }
+
+  if (info.menuItemId === TAB_MENU_IDS.closeRight) {
+    const windowTabs = await chrome.tabs.query({ windowId: currentTab.windowId });
+    const toClose = windowTabs
+      .filter((t) => t.index > currentTab.index)
+      .map((t) => t.id);
+    if (toClose.length) await chrome.tabs.remove(toClose).catch(() => {});
+    return true;
+  }
+
+  if (info.menuItemId === TAB_MENU_IDS.reopenClosed) {
+    await chrome.sessions.restore().catch(() => {});
+    return true;
+  }
+
+  return true;
+}
+
+async function getCurrentContextTab(info, fallbackTab) {
+  if (typeof info.tabId === 'number') {
+    const tabFromInfo = await chrome.tabs.get(info.tabId).catch(() => null);
+    if (tabFromInfo) return tabFromInfo;
+  }
+  if (fallbackTab?.id) {
+    const tabFromFallback = await chrome.tabs.get(fallbackTab.id).catch(() => null);
+    if (tabFromFallback) return tabFromFallback;
+  }
+  return null;
+}
 
 // ─── Broadcast a message to all extension contexts (side panel) ───────────────
 function notifySidePanel(message) {
