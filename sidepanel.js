@@ -2023,15 +2023,19 @@ function hasTabGroup(tab) {
   return typeof tab?.groupId === 'number' && tab.groupId !== TAB_GROUP_NONE_ID;
 }
 
+function isCurrentWindowContextScope() {
+  return state.tabFilter === 'current';
+}
+
 function getContextScopeTabs(tab, tabs = state.tabs) {
-  const useCurrentWindowScope = state.tabFilter === 'current';
+  const useCurrentWindowScope = isCurrentWindowContextScope();
   if (!useCurrentWindowScope) return tabs;
   const scopedWindowId = state.currentWindowId ?? tab.windowId;
   return tabs.filter((t) => t.windowId === scopedWindowId);
 }
 
 async function queryContextScopeTabs(tab) {
-  const useCurrentWindowScope = state.tabFilter === 'current';
+  const useCurrentWindowScope = isCurrentWindowContextScope();
   const queryInfo = useCurrentWindowScope
     ? { windowId: state.currentWindowId ?? tab.windowId }
     : {};
@@ -2067,6 +2071,7 @@ async function ctxTabCloseGroupOthers(e) {
 }
 
 async function closeTabsRelativeInGroup(tab, direction) {
+  if (!hasTabGroup(tab)) return;
   const scopedTabs = await queryContextScopeTabs(tab);
   const tabsInGroup = getScopedGroupTabsForContext(tab, scopedTabs);
   if (!tabsInGroup.length) return;
