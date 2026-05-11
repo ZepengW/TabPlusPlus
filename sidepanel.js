@@ -1992,9 +1992,7 @@ function showTabContextMenu(x, y, tab) {
 
   const hasGroup = hasTabGroup(tab);
   const scopedTabs = getContextScopeTabs(tab);
-  const scopedGroupTabs = hasGroup
-    ? scopedTabs.filter((t) => t.windowId === tab.windowId && t.groupId === tab.groupId).sort((a, b) => a.index - b.index)
-    : [];
+  const scopedGroupTabs = hasGroup ? getScopedGroupTabsForContext(tab, scopedTabs) : [];
   const groupIndex = scopedGroupTabs.findIndex((t) => t.id === tab.id);
   const hasAboveTabs = groupIndex > 0;
   const hasBelowTabs = groupIndex !== -1 && groupIndex < scopedGroupTabs.length - 1;
@@ -2025,16 +2023,24 @@ function hasTabGroup(tab) {
   return typeof tab?.groupId === 'number' && tab.groupId !== TAB_GROUP_NONE_ID;
 }
 
-function getContextScopeTabs(tab) {
+function getContextScopeTabs(tab, tabs = state.tabs) {
   const useCurrentWindowScope = state.tabFilter === 'current';
-  if (!useCurrentWindowScope) return state.tabs;
+  if (!useCurrentWindowScope) return tabs;
   const scopedWindowId = state.currentWindowId ?? tab.windowId;
-  return state.tabs.filter((t) => t.windowId === scopedWindowId);
+  return tabs.filter((t) => t.windowId === scopedWindowId);
 }
 
-function getScopedGroupTabsForContext(tab) {
+async function queryContextScopeTabs(tab) {
+  const useCurrentWindowScope = state.tabFilter === 'current';
+  const queryInfo = useCurrentWindowScope
+    ? { windowId: state.currentWindowId ?? tab.windowId }
+    : {};
+  return chrome.tabs.query(queryInfo);
+}
+
+function getScopedGroupTabsForContext(tab, scopedTabs = getContextScopeTabs(tab)) {
   if (!hasTabGroup(tab)) return [];
-  return getContextScopeTabs(tab)
+  return scopedTabs
     .filter((t) => t.windowId === tab.windowId && t.groupId === tab.groupId)
     .sort((a, b) => a.index - b.index);
 }
@@ -2052,7 +2058,8 @@ async function ctxTabCloseGroupOthers(e) {
   hideTabContextMenu();
   const tab = getContextTab();
   if (!hasTabGroup(tab)) return;
-  const tabsInGroup = getScopedGroupTabsForContext(tab);
+  const scopedTabs = await queryContextScopeTabs(tab);
+  const tabsInGroup = getScopedGroupTabsForContext(tab, scopedTabs);
   const toClose = tabsInGroup.map((t) => t.id).filter((id) => id !== tab.id);
   if (!toClose.length) return;
   await chrome.tabs.remove(toClose);
@@ -2060,7 +2067,8 @@ async function ctxTabCloseGroupOthers(e) {
 }
 
 async function closeTabsRelativeInGroup(tab, direction) {
-  const tabsInGroup = getScopedGroupTabsForContext(tab);
+  const scopedTabs = await queryContextScopeTabs(tab);
+  const tabsInGroup = getScopedGroupTabsForContext(tab, scopedTabs);
   if (!tabsInGroup.length) return;
   const currentIndex = tabsInGroup.findIndex((t) => t.id === tab.id);
   if (currentIndex === -1) return;
