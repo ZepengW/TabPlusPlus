@@ -168,6 +168,8 @@
   "ctx_tab_actions_root":         { "message": "TabPlusPlus \u6807\u7b7e\u9875\u5feb\u6377\u64cd\u4f5c" },
   "ctx_tab_close_current":        { "message": "\u5173\u95ed\u5f53\u524d\u6807\u7b7e\u9875" },
   "ctx_tab_close_group_others":   { "message": "\u5173\u95ed\u7ec4\u5185\u5176\u4ed6\u6807\u7b7e\u9875" },
+  "ctx_tab_close_above":          { "message": "\u5173\u95ed\u4e0a\u65b9\u6807\u7b7e\u9875" },
+  "ctx_tab_close_below":          { "message": "\u5173\u95ed\u4e0b\u65b9\u6807\u7b7e\u9875" },
   "ctx_tab_close_window_others":  { "message": "\u5173\u95ed\u5f53\u524d\u7a97\u53e3\u5185\u5176\u4ed6\u6807\u7b7e\u9875" },
   "ctx_tab_close_others":         { "message": "\u5173\u95ed\u5176\u4ed6\u6807\u7b7e\u9875" },
   "ctx_tab_close_right":          { "message": "\u5173\u95ed\u53f3\u4fa7\u6807\u7b7e\u9875" },
