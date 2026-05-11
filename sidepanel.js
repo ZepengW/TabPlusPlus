@@ -88,6 +88,8 @@ const breadcrumb     = $('breadcrumb');
 let tabRefreshTimer = null;
 let tabLoadInFlight = false;
 let pendingSilentTabReload = false;
+let tabListPointerInside = false;
+let pendingPointerDeferredRefresh = false;
 
 // ─── Initialisation ──────────────────────────────────────────────────────────
 async function init() {
@@ -150,6 +152,8 @@ async function init() {
   $('ctxDelete').addEventListener('click', ctxDelete);
   $('ctxTabCloseCurrent').addEventListener('click', ctxTabCloseCurrent);
   $('ctxTabCloseGroupOthers').addEventListener('click', ctxTabCloseGroupOthers);
+  $('ctxTabCloseAbove').addEventListener('click', ctxTabCloseAbove);
+  $('ctxTabCloseBelow').addEventListener('click', ctxTabCloseBelow);
   $('ctxTabCloseWindowOthers').addEventListener('click', ctxTabCloseWindowOthers);
   $('ctxTabCloseOthers').addEventListener('click', ctxTabCloseOthers);
   $('ctxTabCloseRight').addEventListener('click', ctxTabCloseRight);
@@ -159,6 +163,13 @@ async function init() {
     hideTabContextMenu();
   });
   document.addEventListener('keydown', onKeyDown);
+  tabList.addEventListener('mouseenter', () => {
+    tabListPointerInside = true;
+  });
+  tabList.addEventListener('mouseleave', () => {
+    tabListPointerInside = false;
+    flushDeferredTabRefreshAfterPointerLeave();
+  });
 
   // Edit modal
   $('btnCloseModal').addEventListener('click', closeEditModal);
@@ -278,11 +289,23 @@ function scheduleTabRefresh() {
   tabRefreshTimer = setTimeout(() => {
     tabRefreshTimer = null;
     if (state.view === 'tabs') {
+      if (tabListPointerInside) {
+        pendingPointerDeferredRefresh = true;
+        return;
+      }
       loadTabs({ showSkeleton: false }).catch((err) => {
         console.debug('TabPlusPlus: scheduled tab refresh failed', err);
       });
     }
   }, TAB_EVENT_REFRESH_DEBOUNCE_MS);
+}
+
+function flushDeferredTabRefreshAfterPointerLeave() {
+  if (!pendingPointerDeferredRefresh || state.view !== 'tabs') return;
+  pendingPointerDeferredRefresh = false;
+  loadTabs({ showSkeleton: false }).catch((err) => {
+    console.debug('TabPlusPlus: deferred tab refresh failed', err);
+  });
 }
 
 function renderTabView() {
@@ -1968,9 +1991,17 @@ function showTabContextMenu(x, y, tab) {
   hideContextMenu();
 
   const hasGroup = hasTabGroup(tab);
-  const hasRightTabs = state.tabs.some((t) => t.windowId === tab.windowId && t.index > tab.index);
-  $('ctxTabCloseGroupOthers').style.display = hasGroup ? '' : 'none';
-  $('ctxTabCloseRight').style.display = hasRightTabs ? '' : 'none';
+  const scopedTabs = getContextScopeTabs(tab);
+  const scopedGroupTabs = hasGroup ? getScopedGroupTabsForContext(tab, scopedTabs) : [];
+  const groupIndex = scopedGroupTabs.findIndex((t) => t.id === tab.id);
+  const hasAboveTabs = groupIndex > 0;
+  const hasBelowTabs = groupIndex !== -1 && groupIndex < scopedGroupTabs.length - 1;
+  const hasRightTabs = scopedTabs.some((t) => t.windowId === tab.windowId && t.index > tab.index);
+
+  $('ctxTabCloseGroupOthers').style.display = hasGroup && scopedGroupTabs.length > 1 ? '' : 'none';
+  $('ctxTabCloseAbove').style.display = hasGroup && hasAboveTabs ? '' : 'none';
+  $('ctxTabCloseBelow').style.display = hasGroup && hasBelowTabs ? '' : 'none';
+  $('ctxTabCloseRight').style.display = !hasGroup && hasRightTabs ? '' : 'none';
 
   tabContextMenu.style.left = x + 'px';
   tabContextMenu.style.top = y + 'px';
@@ -1992,6 +2023,32 @@ function hasTabGroup(tab) {
   return typeof tab?.groupId === 'number' && tab.groupId !== TAB_GROUP_NONE_ID;
 }
 
+function isCurrentWindowContextScope() {
+  return state.tabFilter === 'current';
+}
+
+function getContextScopeTabs(tab, tabs = state.tabs) {
+  const useCurrentWindowScope = isCurrentWindowContextScope();
+  if (!useCurrentWindowScope) return tabs;
+  const scopedWindowId = state.currentWindowId ?? tab.windowId;
+  return tabs.filter((t) => t.windowId === scopedWindowId);
+}
+
+async function queryContextScopeTabs(tab) {
+  const useCurrentWindowScope = isCurrentWindowContextScope();
+  const queryInfo = useCurrentWindowScope
+    ? { windowId: state.currentWindowId ?? tab.windowId }
+    : {};
+  return chrome.tabs.query(queryInfo);
+}
+
+function getScopedGroupTabsForContext(tab, scopedTabs = getContextScopeTabs(tab)) {
+  if (!hasTabGroup(tab)) return [];
+  return scopedTabs
+    .filter((t) => t.windowId === tab.windowId && t.groupId === tab.groupId)
+    .sort((a, b) => a.index - b.index);
+}
+
 async function ctxTabCloseCurrent(e) {
   e.stopPropagation();
   hideTabContextMenu();
@@ -2005,11 +2062,44 @@ async function ctxTabCloseGroupOthers(e) {
   hideTabContextMenu();
   const tab = getContextTab();
   if (!hasTabGroup(tab)) return;
-  const tabsInGroup = await chrome.tabs.query({ windowId: tab.windowId, groupId: tab.groupId });
+  const scopedTabs = await queryContextScopeTabs(tab);
+  const tabsInGroup = getScopedGroupTabsForContext(tab, scopedTabs);
   const toClose = tabsInGroup.map((t) => t.id).filter((id) => id !== tab.id);
   if (!toClose.length) return;
   await chrome.tabs.remove(toClose);
   await loadTabs();
+}
+
+async function closeTabsRelativeInGroup(tab, direction) {
+  if (!hasTabGroup(tab)) return;
+  const scopedTabs = await queryContextScopeTabs(tab);
+  const tabsInGroup = getScopedGroupTabsForContext(tab, scopedTabs);
+  if (!tabsInGroup.length) return;
+  const currentIndex = tabsInGroup.findIndex((t) => t.id === tab.id);
+  if (currentIndex === -1) return;
+  const toClose = (direction === 'above'
+    ? tabsInGroup.slice(0, currentIndex)
+    : tabsInGroup.slice(currentIndex + 1)
+  ).map((t) => t.id);
+  if (!toClose.length) return;
+  await chrome.tabs.remove(toClose);
+  await loadTabs();
+}
+
+async function ctxTabCloseAbove(e) {
+  e.stopPropagation();
+  hideTabContextMenu();
+  const tab = getContextTab();
+  if (!hasTabGroup(tab)) return;
+  await closeTabsRelativeInGroup(tab, 'above');
+}
+
+async function ctxTabCloseBelow(e) {
+  e.stopPropagation();
+  hideTabContextMenu();
+  const tab = getContextTab();
+  if (!hasTabGroup(tab)) return;
+  await closeTabsRelativeInGroup(tab, 'below');
 }
 
 async function ctxTabCloseWindowOthers(e) {

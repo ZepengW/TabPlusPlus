@@ -168,6 +168,8 @@
   "ctx_tab_actions_root":         { "message": "TabPlusPlus Tab Actions" },
   "ctx_tab_close_current":        { "message": "Close Current Tab" },
   "ctx_tab_close_group_others":   { "message": "Close Other Tabs in Group" },
+  "ctx_tab_close_above":          { "message": "Close Tabs Above" },
+  "ctx_tab_close_below":          { "message": "Close Tabs Below" },
   "ctx_tab_close_window_others":  { "message": "Close Other Tabs in This Window" },
   "ctx_tab_close_others":         { "message": "Close Other Tabs" },
   "ctx_tab_close_right":          { "message": "Close Tabs to the Right" },
