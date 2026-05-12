@@ -20,11 +20,6 @@ const DEFAULT_SETTINGS = {
 const OPEN_ALL_CONFIRM_THRESHOLD = 10;
 const SESSION_PREVIEW_TABS = 3;
 const TAB_GROUP_NONE_ID = -1;
-// Delay (ms) before reloading tabs after detecting a service worker restart,
-// giving the SW enough time to fully initialise before we query tabs.
-const SW_RESTART_RELOAD_DELAY_MS = 500;
-// Coalesce bursty tab/group events to avoid excessive full re-renders.
-const TAB_EVENT_REFRESH_DEBOUNCE_MS = 120;
 
 // ─── Tab Group Color Map ──────────────────────────────────────────────────────
 const GROUP_COLORS = {
@@ -85,11 +80,6 @@ const tabContextMenu = $('tabContextMenu');
 const toastContainer = $('toastContainer');
 const editModal      = $('editModal');
 const breadcrumb     = $('breadcrumb');
-let tabRefreshTimer = null;
-let tabLoadInFlight = false;
-let pendingSilentTabReload = false;
-let tabListPointerInside = false;
-let pendingPointerDeferredRefresh = false;
 
 // ─── Initialisation ──────────────────────────────────────────────────────────
 async function init() {
@@ -163,16 +153,6 @@ async function init() {
     hideTabContextMenu();
   });
   document.addEventListener('keydown', onKeyDown);
-  tabList.addEventListener('mouseenter', () => {
-    syncTabListPointerInsideState();
-  });
-  tabList.addEventListener('mouseleave', () => {
-    requestAnimationFrame(() => {
-      if (syncTabListPointerInsideState()) return;
-      flushDeferredTabRefreshAfterPointerLeave();
-    });
-  });
-  syncTabListPointerInsideState();
 
   // Edit modal
   $('btnCloseModal').addEventListener('click', closeEditModal);
@@ -211,16 +191,6 @@ async function init() {
     chrome.storage.session.set({ sidePanelOpen: false }).catch(() => {});
   });
 
-  // Reload tabs whenever the panel becomes visible (e.g. after being hidden)
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && state.view === 'tabs') loadTabs({ showSkeleton: false });
-  });
-
-  // Connect to the background service worker via a long-lived port.
-  // When the service worker restarts (after being idle), the port disconnects
-  // and we can detect this to trigger a refresh, preventing a stale/empty panel.
-  connectToBackground();
-
   // Start in saved view
   if (state.view === 'bookmarks') {
     applyPreferencesToUI();
@@ -254,66 +224,21 @@ function switchView(view) {
 }
 
 // ─── Tab Management ──────────────────────────────────────────────────────────
-async function loadTabs(options = {}) {
-  const { showSkeleton = state.tabs.length === 0 } = options;
-  if (tabLoadInFlight) {
-    pendingSilentTabReload = true;
-    return;
+async function loadTabs() {
+  showTabSkeleton(true);
+  const [tabs, tabGroups] = await Promise.all([
+    chrome.tabs.query({}),
+    chrome.tabGroups ? chrome.tabGroups.query({}).catch(() => []) : Promise.resolve([]),
+  ]);
+  state.tabs = tabs;
+  state.tabGroups = tabGroups;
+  // Keep custom order in sync when tabs change externally
+  if (state.tabSort === 'custom' && state.customTabOrder.length > 0) {
+    syncCustomOrder();
   }
-  tabLoadInFlight = true;
-  if (showSkeleton) showTabSkeleton(true);
-  try {
-    const [tabs, tabGroups] = await Promise.all([
-      chrome.tabs.query({}),
-      chrome.tabGroups ? chrome.tabGroups.query({}).catch(() => []) : Promise.resolve([]),
-    ]);
-    state.tabs = tabs;
-    state.tabGroups = tabGroups;
-    // Keep custom order in sync when tabs change externally
-    if (state.tabSort === 'custom' && state.customTabOrder.length > 0) {
-      syncCustomOrder();
-    }
-    tabCountBadge.textContent = tabs.length;
-    renderTabView();
-  } finally {
-    if (showSkeleton) showTabSkeleton(false);
-    tabLoadInFlight = false;
-    if (pendingSilentTabReload) {
-      pendingSilentTabReload = false;
-      loadTabs({ showSkeleton: false }).catch((err) => {
-        console.debug('TabPlusPlus: silent tab reload failed', err);
-      });
-    }
-  }
-}
-
-function scheduleTabRefresh() {
-  if (tabRefreshTimer !== null) clearTimeout(tabRefreshTimer);
-  tabRefreshTimer = setTimeout(() => {
-    tabRefreshTimer = null;
-    if (state.view === 'tabs') {
-      if (syncTabListPointerInsideState()) {
-        pendingPointerDeferredRefresh = true;
-        return;
-      }
-      loadTabs({ showSkeleton: false }).catch((err) => {
-        console.debug('TabPlusPlus: scheduled tab refresh failed', err);
-      });
-    }
-  }, TAB_EVENT_REFRESH_DEBOUNCE_MS);
-}
-
-function syncTabListPointerInsideState() {
-  tabListPointerInside = tabList.matches(':hover');
-  return tabListPointerInside;
-}
-
-function flushDeferredTabRefreshAfterPointerLeave() {
-  if (!pendingPointerDeferredRefresh || state.view !== 'tabs' || syncTabListPointerInsideState()) return;
-  pendingPointerDeferredRefresh = false;
-  loadTabs({ showSkeleton: false }).catch((err) => {
-    console.debug('TabPlusPlus: deferred tab refresh failed', err);
-  });
+  tabCountBadge.textContent = tabs.length;
+  renderTabView();
+  showTabSkeleton(false);
 }
 
 function renderTabView() {
@@ -2180,26 +2105,6 @@ async function ctxTabReopenClosed(e) {
   await loadTabs();
 }
 
-// ─── Service Worker Keep-alive / Reconnect ────────────────────────────────────
-// When the MV3 service worker is idle it gets terminated by the browser.
-// The long-lived port lets us detect that restart and immediately reload the
-// tab list, so the panel never stays empty after a service-worker wake-up.
-function connectToBackground() {
-  let port;
-  try {
-    port = chrome.runtime.connect({ name: 'sidepanel-keepalive' });
-  } catch {
-    return;
-  }
-  port.onDisconnect.addListener(() => {
-    // Small delay to let the service worker fully restart before querying tabs.
-    setTimeout(() => {
-      if (state.view === 'tabs') loadTabs({ showSkeleton: false });
-      connectToBackground();
-    }, SW_RESTART_RELOAD_DELAY_MS);
-  });
-}
-
 // ─── Background Messages ─────────────────────────────────────────────────────
 function onBackgroundMessage(message) {
   switch (message.type) {
@@ -2207,7 +2112,7 @@ function onBackgroundMessage(message) {
     case 'TAB_REMOVED':
     case 'TAB_UPDATED':
     case 'TAB_MOVED':
-      scheduleTabRefresh();
+      if (state.view === 'tabs') loadTabs();
       break;
     case 'TAB_ACTIVATED':
       if (state.view === 'tabs') refreshActiveState(message.activeInfo);
@@ -2216,14 +2121,14 @@ function onBackgroundMessage(message) {
     case 'TAB_GROUP_UPDATED':
     case 'TAB_GROUP_REMOVED':
     case 'TAB_GROUP_MOVED':
-      scheduleTabRefresh();
+      if (state.view === 'tabs') loadTabs();
       break;
     case 'BOOKMARK_ADDED':
       loadBookmarkCount();
       if (state.view === 'bookmarks') loadBookmarks();
       break;
     case 'DUPLICATES_CLOSED':
-      scheduleTabRefresh();
+      if (state.view === 'tabs') loadTabs();
       showToast(
         message.count === 1
           ? t('toast_dup_closed_one', message.count)

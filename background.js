@@ -315,10 +315,8 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 });
 
 function isSignificantUpdate(changeInfo) {
-  // Ignore status-only transitions; the panel should react to actual visible
-  // tab metadata/state changes to avoid high-frequency refresh churn.
-  const keys = ['title', 'url', 'favIconUrl', 'pinned', 'audible', 'mutedInfo', 'groupId'];
-  return keys.some((k) => k in changeInfo);
+  const keys = ['status', 'title', 'favIconUrl', 'pinned', 'audible', 'mutedInfo'];
+  return keys.some((k) => k in changeInfo) && changeInfo.status !== 'loading';
 }
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
