@@ -225,7 +225,8 @@ function switchView(view) {
 
 // ─── Tab Management ──────────────────────────────────────────────────────────
 async function loadTabs() {
-  showTabSkeleton(true);
+  const showSkeleton = state.tabs.length === 0;
+  if (showSkeleton) showTabSkeleton(true);
   const [tabs, tabGroups] = await Promise.all([
     chrome.tabs.query({}),
     chrome.tabGroups ? chrome.tabGroups.query({}).catch(() => []) : Promise.resolve([]),
@@ -238,7 +239,7 @@ async function loadTabs() {
   }
   tabCountBadge.textContent = tabs.length;
   renderTabView();
-  showTabSkeleton(false);
+  if (showSkeleton) showTabSkeleton(false);
 }
 
 function renderTabView() {
