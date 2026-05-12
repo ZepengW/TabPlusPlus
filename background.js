@@ -316,6 +316,8 @@ chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
 
 function isSignificantUpdate(changeInfo) {
   const keys = ['status', 'title', 'url', 'favIconUrl', 'pinned', 'audible', 'mutedInfo', 'groupId'];
+  // Keep loading-phase noise out of the panel refresh path, but still react to
+  // later status changes and any visible tab metadata updates.
   return keys.some((k) => k in changeInfo && !(k === 'status' && changeInfo.status === 'loading'));
 }
 

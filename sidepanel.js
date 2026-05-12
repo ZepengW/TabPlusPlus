@@ -80,6 +80,7 @@ const tabContextMenu = $('tabContextMenu');
 const toastContainer = $('toastContainer');
 const editModal      = $('editModal');
 const breadcrumb     = $('breadcrumb');
+let latestTabLoadRequest = 0;
 
 // ─── Initialisation ──────────────────────────────────────────────────────────
 async function init() {
@@ -225,12 +226,14 @@ function switchView(view) {
 
 // ─── Tab Management ──────────────────────────────────────────────────────────
 async function loadTabs() {
+  const requestId = ++latestTabLoadRequest;
   const showSkeleton = state.tabs.length === 0;
   if (showSkeleton) showTabSkeleton(true);
   const [tabs, tabGroups] = await Promise.all([
     chrome.tabs.query({}),
     chrome.tabGroups ? chrome.tabGroups.query({}).catch(() => []) : Promise.resolve([]),
   ]);
+  if (requestId !== latestTabLoadRequest) return;
   state.tabs = tabs;
   state.tabGroups = tabGroups;
   // Keep custom order in sync when tabs change externally
