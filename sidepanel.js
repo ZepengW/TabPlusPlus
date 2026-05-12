@@ -164,12 +164,15 @@ async function init() {
   });
   document.addEventListener('keydown', onKeyDown);
   tabList.addEventListener('mouseenter', () => {
-    tabListPointerInside = true;
+    syncTabListPointerInsideState();
   });
   tabList.addEventListener('mouseleave', () => {
-    tabListPointerInside = false;
-    flushDeferredTabRefreshAfterPointerLeave();
+    requestAnimationFrame(() => {
+      if (syncTabListPointerInsideState()) return;
+      flushDeferredTabRefreshAfterPointerLeave();
+    });
   });
+  syncTabListPointerInsideState();
 
   // Edit modal
   $('btnCloseModal').addEventListener('click', closeEditModal);
@@ -289,7 +292,7 @@ function scheduleTabRefresh() {
   tabRefreshTimer = setTimeout(() => {
     tabRefreshTimer = null;
     if (state.view === 'tabs') {
-      if (tabListPointerInside) {
+      if (syncTabListPointerInsideState()) {
         pendingPointerDeferredRefresh = true;
         return;
       }
@@ -300,8 +303,13 @@ function scheduleTabRefresh() {
   }, TAB_EVENT_REFRESH_DEBOUNCE_MS);
 }
 
+function syncTabListPointerInsideState() {
+  tabListPointerInside = tabList.matches(':hover');
+  return tabListPointerInside;
+}
+
 function flushDeferredTabRefreshAfterPointerLeave() {
-  if (!pendingPointerDeferredRefresh || state.view !== 'tabs') return;
+  if (!pendingPointerDeferredRefresh || state.view !== 'tabs' || syncTabListPointerInsideState()) return;
   pendingPointerDeferredRefresh = false;
   loadTabs({ showSkeleton: false }).catch((err) => {
     console.debug('TabPlusPlus: deferred tab refresh failed', err);
